@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+gui/node_modules/
+
+# Build and Distribution Outputs
+out/
+dist/
+release/
+gui/out/
+gui/dist/
+gui/release/
+
+# IDE / System
+.DS_Store
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+
+# Temporary files
+/tmp/
+temp/

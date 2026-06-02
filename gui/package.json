@@ -1,0 +1,43 @@
+{
+  "name": "claude-code-installer-gui",
+  "version": "1.0.0",
+  "description": "Claude Code + CC-Switch 可视化安装器",
+  "main": "out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-builder"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "typescript": "^5.5.0"
+  },
+  "build": {
+    "appId": "com.claudecode.installer",
+    "productName": "Claude Code 安装助手",
+    "directories": {
+      "output": "release"
+    },
+    "mac": {
+      "target": ["dmg"],
+      "icon": "resources/icon.icns"
+    },
+    "win": {
+      "target": ["nsis"],
+      "icon": "resources/icon.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "allowToChangeInstallationDirectory": false
+    }
+  }
+}

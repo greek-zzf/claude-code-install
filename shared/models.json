@@ -1,0 +1,35 @@
+[
+  {
+    "id": "deepseek",
+    "name": "DeepSeek",
+    "description": "国产顶级编程模型，性价比极高",
+    "recommended": true,
+    "apiKeyUrl": "https://platform.deepseek.com/api_keys",
+    "apiKeyGuide": "注册 DeepSeek 开放平台 → 控制台 → API Keys → 创建",
+    "baseUrl": "https://api.deepseek.com",
+    "modelId": "deepseek-coder",
+    "pricing": "约 ¥0.001/千token"
+  },
+  {
+    "id": "glm",
+    "name": "智谱 GLM-4",
+    "description": "清华系大模型，中文理解能力强",
+    "recommended": false,
+    "apiKeyUrl": "https://open.bigmodel.cn/usercenter/apikeys",
+    "apiKeyGuide": "注册智谱 AI 开放平台 → 个人中心 → API Keys → 创建",
+    "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+    "modelId": "glm-4-plus",
+    "pricing": "约 ¥0.05/千token"
+  },
+  {
+    "id": "qwen",
+    "name": "通义千问",
+    "description": "阿里云大模型，生态完善",
+    "recommended": false,
+    "apiKeyUrl": "https://dashscope.console.aliyun.com/apiKey",
+    "apiKeyGuide": "注册阿里云 → 开通灵积模型服务 → API-KEY 管理 → 创建",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "modelId": "qwen-max",
+    "pricing": "约 ¥0.02/千token"
+  }
+]
