@@ -79,10 +79,9 @@ jobs:
         run: |
           echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
           
-          # 使用 -sS 可以在失败时输出错误，添加超时和重试
-          RELEASE_JSON=$(curl -X POST -sS --connect-timeout 20 --retry 3 \
-            -d "access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}" \
-            "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases") || {
+          # 使用 URL Query 传参，限制最大执行时间 30 秒，防止 CDN/WAF 挂起连接
+          RELEASE_JSON=$(curl -X POST -sS -m 30 --connect-timeout 15 --retry 3 \
+            "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}") || {
               echo "Error: curl POST to create Gitee release failed."
               exit 1
             }
@@ -91,7 +90,7 @@ jobs:
           
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "Failed to create release (possibly already exists). Fetching existing release ID..."
-            RELEASES_LIST=$(curl -sS --connect-timeout 20 --retry 3 \
+            RELEASES_LIST=$(curl -sS -m 30 --connect-timeout 15 --retry 3 \
               "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20") || {
                 echo "Error: curl GET to fetch Gitee releases failed."
                 exit 1
@@ -120,7 +119,8 @@ jobs:
           find artifacts -type f \( -name "*.dmg" -o -name "*.exe" \) | while read filepath; do
             filename=$(basename "$filepath")
             echo "Uploading $filename to Gitee..."
-            UPLOAD_RESP=$(curl -X POST -sS --connect-timeout 30 --retry 3 \
+            # 上传文件通常较大，给予最大 3 分钟超时限制
+            UPLOAD_RESP=$(curl -X POST -sS -m 180 --connect-timeout 30 --retry 3 \
               -F "access_token=${{ secrets.GITEE_TOKEN }}" \
               -F "file=@$filepath" \
               "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files") || {
