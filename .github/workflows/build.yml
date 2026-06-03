@@ -78,13 +78,24 @@ jobs:
       - name: Upload to Gitee via API
         run: |
           echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
-          RELEASE_JSON=$(curl -X POST -s -d "access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}" https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases)
+          
+          # 使用 -sS 可以在失败时输出错误，添加超时和重试
+          RELEASE_JSON=$(curl -X POST -sS --connect-timeout 20 --retry 3 \
+            -d "access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}" \
+            "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases") || {
+              echo "Error: curl POST to create Gitee release failed."
+              exit 1
+            }
           
           RELEASE_ID=$(echo "$RELEASE_JSON" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)
           
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "Failed to create release (possibly already exists). Fetching existing release ID..."
-            RELEASES_LIST=$(curl -s "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20")
+            RELEASES_LIST=$(curl -sS --connect-timeout 20 --retry 3 \
+              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20") || {
+                echo "Error: curl GET to fetch Gitee releases failed."
+                exit 1
+              }
             RELEASE_ID=$(echo "$RELEASES_LIST" | node -e '
               let data = "";
               process.stdin.on("data", chunk => data += chunk);
@@ -109,10 +120,13 @@ jobs:
           find artifacts -type f \( -name "*.dmg" -o -name "*.exe" \) | while read filepath; do
             filename=$(basename "$filepath")
             echo "Uploading $filename to Gitee..."
-            UPLOAD_RESP=$(curl -X POST -s \
+            UPLOAD_RESP=$(curl -X POST -sS --connect-timeout 30 --retry 3 \
               -F "access_token=${{ secrets.GITEE_TOKEN }}" \
               -F "file=@$filepath" \
-              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files")
+              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files") || {
+                echo "Error: curl POST to upload artifact $filename failed."
+                exit 1
+              }
             echo "Response: $UPLOAD_RESP"
           done
         shell: bash
