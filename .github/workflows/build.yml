@@ -55,3 +55,16 @@ jobs:
             gui/release/*.blockmap
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload to Gitee Release
+        uses: wangchuan/gitee-release-action@v1.1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          token: ${{ secrets.GITEE_TOKEN }}
+          owner: greek-zzf
+          repo: claude-code-install
+          tag: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          file: |
+            gui/release/*.dmg
+            gui/release/*.exe
