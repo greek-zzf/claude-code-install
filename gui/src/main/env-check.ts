@@ -1,5 +1,5 @@
 import { execSync } from 'child_process'
-import { existsSync, statfsSync } from 'fs'
+import { existsSync, statfsSync, readdirSync } from 'fs'
 import { homedir, platform, arch, release } from 'os'
 import { join } from 'path'
 
@@ -14,9 +14,46 @@ export interface EnvCheckResult {
   diskSpace: { freeGB: number; sufficient: boolean }
 }
 
+function getExecutablePath(name: string): string {
+  if (platform() !== 'darwin') return name
+  const searchDirs = [
+    '/opt/homebrew/bin',
+    '/usr/local/bin'
+  ]
+  for (const dir of searchDirs) {
+    const fullPath = join(dir, name)
+    if (existsSync(fullPath)) return fullPath
+  }
+
+  // 特殊处理 NVM 安装的 node / npm
+  if (name === 'node' || name === 'npm') {
+    const nvmDir = join(homedir(), '.nvm/versions/node')
+    if (existsSync(nvmDir)) {
+      try {
+        const versions = readdirSync(nvmDir)
+        if (versions.length > 0) {
+          versions.sort()
+          const latest = versions[versions.length - 1]
+          const fullPath = join(nvmDir, latest, 'bin', name)
+          if (existsSync(fullPath)) return fullPath
+        }
+      } catch {}
+    }
+  }
+
+  return name
+}
+
 function tryExec(cmd: string): string | null {
   try {
-    return execSync(cmd, { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
+    // 自动提取命令名并尝试用绝对路径替换，例如 "brew --version" 变为 "/opt/homebrew/bin/brew --version"
+    const parts = cmd.split(' ')
+    const exe = parts[0]
+    const resolvedExe = getExecutablePath(exe)
+    parts[0] = resolvedExe
+    const resolvedCmd = parts.join(' ')
+    
+    return execSync(resolvedCmd, { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] }).trim()
   } catch {
     return null
   }
