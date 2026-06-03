@@ -56,16 +56,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Upload Artifacts for Sync
+        uses: actions/upload-artifact@v4
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: release-artifacts-${{ matrix.os }}
+          path: |
+            gui/release/*.dmg
+            gui/release/*.exe
+
   sync-to-gitee:
     name: Sync Release to Gitee
     needs: release
     runs-on: ubuntu-latest
     steps:
-      - name: Sync GitHub Release to Gitee
-        uses: trustedinster/sync-release-gitee@v1.3
+      - name: Download Artifacts
+        uses: actions/download-artifact@v4
         with:
-          gitee_owner: greek-zzf
-          gitee_repo: claude-code-install
-          gitee_token: ${{ secrets.GITEE_TOKEN }}
-          github_owner: greek-zzf
-          github_repo: claude-code-install
+          path: artifacts
+
+      - name: Upload to Gitee via API
+        run: |
+          echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
+          RELEASE_JSON=$(curl -X POST -s -d "access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}" https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases)
+          
+          RELEASE_ID=$(echo "$RELEASE_JSON" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)
+          
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
+            echo "Failed to create release (possibly already exists). Fetching existing release ID..."
+            RELEASES_LIST=$(curl -s "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20")
+            RELEASE_ID=$(echo "$RELEASES_LIST" | node -e '
+              let data = "";
+              process.stdin.on("data", chunk => data += chunk);
+              process.stdin.on("end", () => {
+                try {
+                  const list = JSON.parse(data);
+                  const rel = list.find(r => r.tag_name === process.argv[1]);
+                  if (rel) process.stdout.write(rel.id.toString());
+                } catch(e) {}
+              });
+            ' "${{ github.ref_name }}")
+          fi
+          
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "undefined" ]; then
+            echo "Error: Could not retrieve Gitee Release ID."
+            echo "API Response: $RELEASE_JSON"
+            exit 1
+          fi
+          
+          echo "Using Gitee Release ID: $RELEASE_ID"
+          
+          find artifacts -type f \( -name "*.dmg" -o -name "*.exe" \) | while read filepath; do
+            filename=$(basename "$filepath")
+            echo "Uploading $filename to Gitee..."
+            UPLOAD_RESP=$(curl -X POST -s \
+              -F "access_token=${{ secrets.GITEE_TOKEN }}" \
+              -F "file=@$filepath" \
+              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files")
+            echo "Response: $UPLOAD_RESP"
+          done
+        shell: bash
