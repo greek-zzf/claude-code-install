@@ -87,6 +87,8 @@ jobs:
             --data-urlencode "access_token=${{ secrets.GITEE_TOKEN }}" \
             --data-urlencode "tag_name=${{ github.ref_name }}" \
             --data-urlencode "name=Release ${{ github.ref_name }}" \
+            --data-urlencode "body=Release ${{ github.ref_name }}" \
+            --data-urlencode "target_commitish=main" \
             "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases") || {
               echo "Warning: Gitee API is blocked by WAF (TLS timeout). Skipping Gitee sync."
               exit 0
