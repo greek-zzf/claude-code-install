@@ -79,9 +79,9 @@ jobs:
         run: |
           echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
           
-          # 使用 -v -4 强制 IPv4 并输出连接日志，限时 30 秒
+          # 使用 -v -4 强制 IPv4 并输出连接日志，限时 30 秒，修正 owner 为 geek-zzf
           RELEASE_JSON=$(curl -4 -v -X POST -m 30 --connect-timeout 15 --retry 2 \
-            "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}") || {
+            "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}") || {
               echo "Error: curl POST to create Gitee release failed."
               exit 1
             }
@@ -91,7 +91,7 @@ jobs:
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "Failed to create release (possibly already exists). Fetching existing release ID..."
             RELEASES_LIST=$(curl -4 -v -m 30 --connect-timeout 15 --retry 2 \
-              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20") || {
+              "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20") || {
                 echo "Error: curl GET to fetch Gitee releases failed."
                 exit 1
               }
@@ -119,11 +119,11 @@ jobs:
           find artifacts -type f \( -name "*.dmg" -o -name "*.exe" \) | while read filepath; do
             filename=$(basename "$filepath")
             echo "Uploading $filename to Gitee..."
-            # 上传大文件也开启 -v -4
+            # 上传大文件也开启 -v -4，修正 owner 为 geek-zzf
             UPLOAD_RESP=$(curl -4 -v -X POST -m 180 --connect-timeout 30 --retry 3 \
               -F "access_token=${{ secrets.GITEE_TOKEN }}" \
               -F "file=@$filepath" \
-              "https://gitee.com/api/v5/repos/greek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files") || {
+              "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files") || {
                 echo "Error: curl POST to upload artifact $filename failed."
                 exit 1
               }
