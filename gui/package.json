@@ -2,6 +2,11 @@
   "name": "claude-code-installer-gui",
   "version": "1.0.0",
   "description": "Claude Code + CC-Switch 可视化安装器",
+  "author": "greek-zzf",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/greek-zzf/claude-code-install.git"
+  },
   "main": "out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -22,11 +27,15 @@
     "typescript": "^5.5.0"
   },
   "build": {
+    "publish": null,
     "appId": "com.claudecode.installer",
     "productName": "Claude Code 安装助手",
     "directories": {
       "output": "release"
     },
+    "files": [
+      "out/**/*"
+    ],
     "mac": {
       "target": ["dmg"],
       "icon": "resources/icon.icns"
