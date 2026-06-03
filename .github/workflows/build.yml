@@ -9,6 +9,8 @@ jobs:
   release:
     name: Build & Release Electron App
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
 
     strategy:
       matrix:
