@@ -1,0 +1,1413 @@
+<!doctype html>
+<html lang="zh-CN"><head><script data-od-sandbox-shim="">(function(){
+  function makeStore(){
+    var data = {};
+    var api = {
+      getItem: function(k){ return Object.prototype.hasOwnProperty.call(data, k) ? data[k] : null; },
+      setItem: function(k, v){ data[k] = String(v); },
+      removeItem: function(k){ delete data[k]; },
+      clear: function(){ data = {}; },
+      key: function(i){ return Object.keys(data)[i] || null; }
+    };
+    Object.defineProperty(api, 'length', { get: function(){ return Object.keys(data).length; } });
+    return api;
+  }
+  function tryShim(name){
+    var works = false;
+    try { works = !!window[name] && typeof window[name].getItem === 'function'; void window[name].length; }
+    catch (_) { works = false; }
+    if (works) return;
+    try { Object.defineProperty(window, name, { configurable: true, value: makeStore() }); }
+    catch (_) { try { window[name] = makeStore(); } catch (__) {} }
+  }
+  tryShim('localStorage');
+  tryShim('sessionStorage');
+  document.addEventListener('click', (e) => {
+    if (!e.target || !(e.target instanceof Element)) return;
+    var link = e.target.closest('a[href]');
+    if (!link) return;
+    var href = link.getAttribute('href');
+    if (href === null) return;
+    var isAnchor = href.startsWith('#') || href === '';
+    if (isAnchor) {
+      e.preventDefault();
+      if (href === '' || href === '#') {
+        window.scrollTo({ top: 0 });
+        history.replaceState(null, '', ' ');
+      } else {
+        var targetId = href.slice(1);
+        var target = targetId ? document.getElementById(targetId) : null;
+        if (target) {
+          target.scrollIntoView();
+          location.hash === href && history.replaceState(null, '', ' ');
+          location.hash = href;
+        }
+      }
+    } else if (link.getAttribute('target') === '_blank') {
+      e.preventDefault();
+      let safe = false;
+      try {
+        var url = new URL(href, location.href);
+        safe =
+          url.protocol === 'http:' ||
+          url.protocol === 'https:' ||
+          url.protocol === 'mailto:';
+      } catch (_) {}
+      safe && window.open(href, '_blank', 'noopener,noreferrer');
+    }
+  });
+})();</script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claude Code 一键安装器 · 可视化安装，面向中国大陆用户</title>
+  <style>
+    :root {
+      /* ─── Surface (3 levels) ─────────────────────────────────────────
+       * Parchment (bg) → Ivory (surface) → Warm Sand (surface-warm).
+       * Never use pure white as a page background — the warm cream IS
+       * the Claude personality. */
+      --bg: #f5f4ed;
+      --surface: #faf9f5;
+      --surface-warm: #e8e6dc;   /* Warm Sand — button bg, prominent interactive surfaces */
+
+      /* ─── Foreground ramp (4 levels) ────────────────────────────────
+       * Every gray carries a yellow-brown undertone. No cool blue-grays. */
+      --fg: #141413;             /* Anthropic Near Black — warmest "black" in any major tech brand */
+      --fg-2: #3d3d3a;           /* Dark Warm — dark text links, emphasized secondary text */
+      --muted: #5e5d59;          /* Olive Gray — secondary body text */
+      --meta: #87867f;           /* Stone Gray — tertiary text, footnotes, metadata */
+
+      /* ─── Border (2 levels) ──────────────────────────────────────────
+       * Cream-tinted borders — the gentlest possible containment. */
+      --border: #f0eee6;         /* Border Cream — standard light-theme border */
+      --border-soft: #e8e6dc;    /* Border Warm — section dividers, emphasized containment */
+
+      /* ─── Accent ──────────────────────────────────────────────────────
+       * Terracotta Brand — the only chromatic element on most screens.
+       * Used for primary CTA buttons and highest-signal brand moments only. */
+      --accent: #c96442;
+      --accent-on: #faf9f5;      /* Ivory — fg when terracotta is the bg */
+      --accent-hover: color-mix(in oklab, var(--accent), black 8%);
+      --accent-active: color-mix(in oklab, var(--accent), black 14%);
+
+      /* ─── Semantic ────────────────────────────────────────────────────
+       * Error Crimson is a warm, deep red — serious without alarming.
+       * Focus Blue (#3898ec) is the sole cool color in the system,
+       * reserved for accessibility (input focus rings). */
+      --success: #17a34a;
+      --warn: #eab308;
+      --danger: #b53333;         /* Error Crimson — warm red, not standard danger red */
+
+      /* ─── Typography ──────────────────────────────────────────────────
+       * Anthropic Serif (Georgia fallback) for all headlines — the single
+       * weight (500) gives every heading the gravitas of a published title.
+       * Anthropic Sans for all UI/body — quiet functional efficiency. */
+      --font-display: "Anthropic Serif", Georgia, "Times New Roman", serif;
+      --font-body: "Anthropic Sans", "Arial", system-ui, -apple-system, sans-serif;
+      --font-mono: "Anthropic Mono", ui-monospace, "JetBrains Mono", Menlo, monospace;
+
+      /* Type scale — DESIGN.md §3 Typography Rules.
+       * 64px hero → 52px section → 36px sub → 32px card → 25px small */
+      --text-xs: 10px;           /* Overline — uppercase labels at smallest scale */
+      --text-sm: 14px;           /* Caption — metadata, descriptions */
+      --text-base: 16px;         /* Body Standard */
+      --text-lg: 20px;           /* Body Large — intro paragraphs */
+      --text-xl: 25px;           /* Sub-heading Small */
+      --text-2xl: 32px;          /* Sub-heading — card titles, feature names */
+      --text-3xl: 52px;          /* Section Heading */
+      --text-4xl: 64px;          /* Display / Hero — maximum impact, book-title presence */
+
+      --leading-body: 1.6;       /* Relaxed — closer to a book than a dashboard */
+      --leading-tight: 1.1;      /* Tight headings — serif letterforms breathe naturally */
+      --tracking-display: 0em;   /* Serif faces carry authority; no compression needed */
+
+      /* ─── Spacing ─────────────────────────────────────────────────────
+       * 8px base unit per DESIGN.md §5. Card internal padding ~24–32px. */
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-8: 32px;
+      --space-12: 48px;
+
+      --section-y-desktop: 96px; /* Editorial pacing — generous like a magazine spread */
+      --section-y-tablet: 64px;
+      --section-y-phone: 48px;
+
+      /* ─── Radius ──────────────────────────────────────────────────────
+       * Claude's softness: comfortably rounded (8px) for standard,
+       * generously rounded (12px) for primary, very rounded (16px) for
+       * featured containers. No sharp corners — softness is core identity. */
+      --radius-sm: 8px;          /* Comfortably rounded — standard buttons, cards */
+      --radius-md: 12px;         /* Generously rounded — primary buttons, inputs, nav */
+      --radius-lg: 16px;         /* Very rounded — featured containers, video players */
+      --radius-pill: 9999px;     /* Chip-like elements (use sparingly) */
+
+      /* ─── Elevation ───────────────────────────────────────────────────
+       * Ring shadows (0px 0px 0px 1px) instead of drop shadows.
+       * The signature is a border-like halo — shadow pretending to be
+       * a border. Drop shadows only at 0.05 opacity when truly needed. */
+      --elev-flat: none;
+      --elev-ring: 0 0 0 1px var(--border);          /* Border-like halo */
+      --elev-raised: rgba(0, 0, 0, 0.05) 0px 4px 24px; /* Whisper soft — barely visible lift */
+
+      /* ─── Focus ring ──────────────────────────────────────────────────
+       * Focus Blue (#3898ec) is the ONLY cool color in the Claude system.
+       * Reserved exclusively for accessibility / keyboard focus. */
+      --focus-ring: 0 0 0 3px rgba(56, 152, 236, 0.3);
+
+      /* ─── Motion ──────────────────────────────────────────────────────
+       * Short, purposeful transitions. The editorial warmth doesn't need
+       * animation energy — interactions should feel calm. */
+      --motion-fast: 150ms;
+      --motion-base: 200ms;
+      --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+      /* ─── Layout ──────────────────────────────────────────────────────
+       * 1200px container, editorial layout. Hero is centered, feature
+       * sections use 2–3 column card grids. */
+      --container-max: 1200px;
+      --container-gutter-desktop: 24px;
+      --container-gutter-tablet: 16px;
+      --container-gutter-phone: 12px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: var(--leading-body);
+      text-rendering: optimizeLegibility;
+      -webkit-font-smoothing: antialiased;
+    }
+    img, svg { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; cursor: pointer; }
+    p { text-wrap: pretty; }
+    h1, h2, h3, h4 { text-wrap: balance; }
+
+    .container {
+      max-width: var(--container-max);
+      margin-inline: auto;
+      padding-inline: var(--container-gutter-desktop);
+    }
+    .section { padding-block: var(--section-y-desktop); }
+    .section + .section { border-top: 1px solid var(--border); }
+    .stack { display: flex; flex-direction: column; }
+    .stack > * + * { margin-top: var(--space-5); }
+    .row { display: flex; align-items: center; gap: var(--space-5); }
+    .row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-8); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-8); }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
+    .grid-2-1 { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: var(--space-12); align-items: start; }
+    .grid-1-2 { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 2fr); gap: var(--space-12); align-items: start; }
+    .installer-grid { align-items: stretch; }
+    .installer-copy,
+    .installer-aside { height: 100%; }
+    .installer-copy {
+      display: flex;
+      flex-direction: column;
+    }
+    .installer-copy .model-grid { flex: 1; align-items: stretch; }
+    .installer-copy .model-card,
+    .installer-aside {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .h1, h1 {
+      font-family: var(--font-display);
+      font-size: clamp(42px, 7vw, var(--text-4xl));
+      font-weight: 500;
+      line-height: var(--leading-tight);
+      letter-spacing: var(--tracking-display);
+      margin: 0;
+    }
+    .h2, h2 {
+      font-family: var(--font-display);
+      font-size: clamp(32px, 5vw, var(--text-3xl));
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: var(--tracking-display);
+      margin: 0;
+    }
+    .h3, h3 {
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 500;
+      line-height: 1.2;
+      letter-spacing: var(--tracking-display);
+      margin: 0;
+    }
+    .lead {
+      font-size: var(--text-lg);
+      line-height: var(--leading-body);
+      color: var(--muted);
+      max-width: 58ch;
+      margin: 0;
+    }
+    .eyebrow {
+      font-family: var(--font-body);
+      font-size: var(--text-xs);
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 var(--space-5);
+    }
+    .meta { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--meta); }
+    .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+    .topnav {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: color-mix(in oklab, var(--bg) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+    }
+    .topnav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 68px;
+      gap: var(--space-5);
+    }
+    .topnav .logo {
+      font-family: var(--font-display);
+      font-size: 21px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .topnav nav {
+      display: flex;
+      gap: var(--space-8);
+      align-items: center;
+    }
+    .topnav nav a {
+      color: var(--muted);
+      font-size: var(--text-sm);
+      transition: color var(--motion-fast) var(--ease-standard);
+    }
+    .topnav nav a:hover { color: var(--fg); }
+    .topnav-actions { display: flex; align-items: center; gap: var(--space-2); }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--space-2);
+      min-height: 44px;
+      padding: 9px var(--space-5);
+      border-radius: var(--radius-md);
+      border: 1px solid transparent;
+      font-size: var(--text-sm);
+      font-weight: 500;
+      transition: transform var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard), border-color var(--motion-fast) var(--ease-standard);
+    }
+    .btn:active { transform: translateY(1px); }
+    .btn:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .btn-primary { background: var(--accent); color: var(--accent-on); border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--surface-warm); color: var(--fg-2); border-color: var(--border-soft); box-shadow: 0 0 0 1px var(--border-soft); }
+    .btn-secondary:hover { border-color: color-mix(in oklab, var(--fg) 28%, var(--border-soft)); }
+    .btn-ghost { background: transparent; color: var(--fg); border-color: transparent; padding-inline: var(--space-2); }
+    .btn-ghost:hover { color: var(--fg-2); background: color-mix(in oklab, var(--fg) 4%, transparent); }
+    .btn-arrow::after { content: "->"; font-family: var(--font-mono); transition: transform var(--motion-fast) var(--ease-standard); }
+    .btn-arrow:hover::after { transform: translateX(2px); }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: var(--space-8);
+      box-shadow: var(--elev-raised);
+    }
+    .card-flat { background: transparent; border: 0; padding: 0; box-shadow: none; }
+    .card-rule { background: transparent; border: 0; border-top: 1px solid var(--fg); padding: var(--space-6) 0 0; border-radius: 0; box-shadow: none; }
+
+    .feature .feature-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-sm);
+      color: var(--fg-2);
+      margin-bottom: var(--space-4);
+      background: var(--surface);
+    }
+    .feature .feature-mark svg { width: 19px; height: 19px; }
+    .feature h3 { margin-bottom: var(--space-2); }
+    .feature p { margin: 0; color: var(--muted); font-size: var(--text-base); }
+
+    .stat .stat-num {
+      font-family: var(--font-display);
+      font-size: clamp(40px, 7vw, var(--text-4xl));
+      line-height: 0.98;
+      color: var(--fg);
+      font-weight: 500;
+    }
+    .stat .stat-label { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space-2); max-width: 28ch; }
+    .stat .stat-unit { font-size: 0.5em; opacity: 0.7; margin-left: var(--space-1); }
+
+    .quote {
+      font-family: var(--font-display);
+      font-size: clamp(24px, 3vw, var(--text-2xl));
+      line-height: 1.3;
+      max-width: 28ch;
+    }
+    .quote-author { color: var(--muted); font-size: var(--text-sm); margin-top: var(--space-5); }
+    .quote-mark {
+      font-family: var(--font-display);
+      font-size: 120px;
+      line-height: 0.7;
+      color: color-mix(in oklab, var(--fg) 14%, transparent);
+      margin-bottom: calc(var(--space-8) * -1);
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-3);
+      background: var(--surface-warm);
+      color: var(--fg-2);
+      border-radius: var(--radius-pill);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-1) var(--space-3);
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-pill);
+      font-size: var(--text-sm);
+      white-space: nowrap;
+    }
+    .field { display: flex; flex-direction: column; gap: var(--space-2); }
+    .field label { font-size: var(--text-sm); color: var(--muted); }
+    .input, .textarea {
+      width: 100%;
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      color: var(--fg);
+      font: inherit;
+      font-size: var(--text-base);
+    }
+    .input:focus, .textarea:focus { outline: none; box-shadow: var(--focus-ring); border-color: var(--border-soft); }
+    .textarea { min-height: 96px; resize: vertical; line-height: var(--leading-body); }
+
+    .ds-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+    .ds-table th, .ds-table td { padding: var(--space-4); text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .ds-table th { color: var(--muted); font-weight: 500; font-family: var(--font-body); font-size: var(--text-xs); letter-spacing: 0.5px; text-transform: uppercase; }
+    .ds-table tbody tr:hover { background: color-mix(in oklab, var(--fg) 4%, transparent); }
+    .ds-table .num-col { font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+
+    .ph-img {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      aspect-ratio: 16 / 10;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      letter-spacing: 0.5px;
+      box-shadow: var(--elev-raised);
+    }
+    .ph-img.square { aspect-ratio: 1 / 1; }
+    .ph-img.portrait { aspect-ratio: 3 / 4; }
+    .ph-img.wide { aspect-ratio: 16 / 9; }
+    .rule { border: 0; border-top: 1px solid var(--border); margin: 0; }
+    .rule-strong { border: 0; border-top: 1px solid var(--fg); margin: 0; }
+
+    .hero { padding-block: clamp(72px, 12vw, 144px); }
+    .hero h1 { margin-bottom: var(--space-5); }
+    .hero .lead { margin-bottom: var(--space-8); }
+    .hero-center { text-align: center; max-width: 34ch; margin-inline: auto; }
+    .hero-cta { display: inline-flex; gap: var(--space-3); flex-wrap: wrap; }
+    .hero-center .hero-cta { justify-content: center; }
+    .hero-split { display: grid; grid-template-columns: minmax(0, 0.95fr) minmax(420px, 1.05fr); gap: clamp(var(--space-8), 7vw, var(--space-12)); align-items: center; }
+
+    .log-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr) 112px;
+      gap: var(--space-8);
+      padding: var(--space-6) 0;
+      border-top: 1px solid var(--border);
+      align-items: baseline;
+    }
+    .log-row .meta { color: var(--muted); }
+    .log-row h3 { font-size: var(--text-lg); }
+    .log-row .pull { text-align: right; }
+
+    .product-shot {
+      aspect-ratio: auto;
+      display: block;
+      padding: var(--space-4);
+      color: var(--fg);
+      font-family: var(--font-body);
+      letter-spacing: 0;
+    }
+    .product-window {
+      overflow: hidden;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-soft);
+      background: var(--surface);
+    }
+    .window-top {
+      display: flex;
+      justify-content: space-between;
+      gap: var(--space-4);
+      align-items: center;
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in oklab, var(--surface-warm) 56%, var(--surface));
+    }
+    .window-title { font-family: var(--font-display); font-size: var(--text-lg); font-weight: 500; }
+    .window-body { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: var(--space-5); padding: var(--space-5); }
+    .step-list { display: grid; gap: var(--space-3); }
+    .step {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      gap: var(--space-3);
+      align-items: start;
+      padding: var(--space-3);
+      border-radius: var(--radius-md);
+      background: color-mix(in oklab, var(--surface-warm) 42%, var(--surface));
+    }
+    .step-index {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: var(--radius-pill);
+      background: var(--fg);
+      color: var(--surface);
+      font-family: var(--font-mono);
+      font-size: var(--text-xs);
+    }
+    .step strong { display: block; font-size: var(--text-sm); color: var(--fg); }
+    .step span { display: block; color: var(--muted); font-size: var(--text-sm); line-height: 1.45; margin-top: var(--space-1); }
+    .install-panel {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+      background: var(--bg);
+    }
+    .terminal {
+      margin-top: var(--space-4);
+      background: var(--fg);
+      color: var(--surface);
+      border-radius: var(--radius-md);
+      padding: var(--space-4);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      line-height: 1.7;
+      overflow: hidden;
+    }
+    .terminal .muted { color: color-mix(in oklab, var(--surface) 58%, var(--fg)); }
+    .progress {
+      height: 8px;
+      overflow: hidden;
+      border-radius: var(--radius-pill);
+      background: var(--surface-warm);
+      margin-top: var(--space-4);
+    }
+    .progress-fill {
+      width: 68%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--fg);
+      transform-origin: left;
+      animation: fillPulse 3s var(--ease-standard) infinite;
+    }
+    @keyframes fillPulse {
+      0%, 100% { transform: scaleX(0.88); }
+      50% { transform: scaleX(1); }
+    }
+    .screenshot-frame {
+      margin: 0;
+      padding: var(--space-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--elev-raised);
+      overflow: hidden;
+    }
+    .screenshot-frame img {
+      width: 100%;
+      height: auto;
+      border-radius: var(--radius-md);
+      background: var(--fg);
+    }
+    .screenshot-frame figcaption {
+      margin: var(--space-3) var(--space-1) var(--space-1);
+      color: var(--muted);
+      font-size: var(--text-sm);
+    }
+    .screenshot-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--space-5);
+    }
+    .screenshot-card {
+      display: grid;
+      gap: var(--space-4);
+    }
+    .screenshot-card h3 {
+      margin: 0;
+    }
+    .screenshot-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .trust-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .section-intro {
+      max-width: 720px;
+      margin-bottom: var(--space-12);
+    }
+    .check-list {
+      display: grid;
+      gap: var(--space-3);
+      margin: var(--space-5) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .check-list li {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: var(--space-3);
+      color: var(--muted);
+    }
+    .check-list li::before {
+      content: "";
+      width: 20px;
+      height: 20px;
+      margin-top: 2px;
+      border-radius: var(--radius-pill);
+      background: var(--surface-warm);
+      box-shadow: inset 0 0 0 1px var(--border-soft);
+    }
+    .pain-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: var(--space-8);
+    }
+    .compare-card {
+      border-top: 1px solid var(--fg);
+      padding-top: var(--space-6);
+    }
+    .compare-card h3 { margin-bottom: var(--space-4); }
+    .compare-row {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr);
+      gap: var(--space-5);
+      padding-block: var(--space-4);
+      border-top: 1px solid var(--border);
+    }
+    .compare-row:first-of-type { border-top: 0; }
+    .compare-row .meta { color: var(--muted); }
+    .model-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-5); }
+    .model-card { padding: var(--space-6); }
+    .model-card p { color: var(--muted); margin: var(--space-2) 0 0; }
+    .download-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--space-4);
+      width: 100%;
+      text-align: left;
+      padding: var(--space-5);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      color: var(--fg);
+      transition: border-color var(--motion-fast) var(--ease-standard), background var(--motion-fast) var(--ease-standard), transform var(--motion-fast) var(--ease-standard);
+    }
+    .download-card:hover {
+      border-color: var(--fg);
+      background: color-mix(in oklab, var(--surface-warm) 40%, var(--surface));
+    }
+    .download-card:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    .download-card:active { transform: translateY(1px); }
+    .download-card strong { display: block; font-family: var(--font-display); font-size: var(--text-xl); font-weight: 500; }
+    .download-desc { display: block; color: var(--muted); margin-top: var(--space-1); }
+    .download-card code {
+      display: block;
+      margin-top: var(--space-2);
+      font-family: var(--font-mono);
+      font-size: var(--text-sm);
+      color: var(--fg-2);
+      overflow-wrap: anywhere;
+    }
+    .download-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 36px;
+      padding: 0 var(--space-3);
+      border-radius: var(--radius-pill);
+      background: var(--surface-warm);
+      color: var(--fg-2);
+      font-size: var(--text-sm);
+      white-space: nowrap;
+    }
+    .download-card.primary-version {
+      border-color: var(--fg);
+      background: color-mix(in oklab, var(--surface-warm) 34%, var(--surface));
+    }
+    .download-card.primary-version .download-chip {
+      background: var(--accent);
+      color: var(--accent-on);
+    }
+    .download-box {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+      gap: var(--space-8);
+      align-items: stretch;
+    }
+    .download-copy,
+    .download-actions {
+      height: 100%;
+      min-height: 100%;
+    }
+    .download-copy {
+      display: flex;
+      flex-direction: column;
+      padding: var(--space-8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--elev-ring);
+    }
+    .download-actions {
+      display: grid;
+      gap: var(--space-3);
+      align-content: start;
+      padding: var(--space-8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--elev-ring);
+    }
+    .contact-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 188px;
+      gap: var(--space-8);
+      align-items: center;
+      padding: var(--space-8);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--elev-raised);
+    }
+    .contact-card p {
+      margin: var(--space-4) 0 0;
+      color: var(--muted);
+    }
+    .contact-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+    }
+    .wechat-figure { margin: 0; }
+    .wechat-qr {
+      width: 188px;
+      aspect-ratio: 1 / 1;
+      padding: var(--space-2);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+    .wechat-qr img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: contain;
+      border-radius: var(--radius-sm);
+    }
+    .wechat-figure figcaption {
+      margin-top: var(--space-3);
+      color: var(--muted);
+      font-size: var(--text-sm);
+      text-align: center;
+    }
+    .command-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      padding: var(--space-4);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--fg);
+      color: var(--surface);
+      font-family: var(--font-mono);
+      overflow: hidden;
+    }
+    .command-box code {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font: inherit;
+    }
+    .command-box .btn {
+      min-height: 36px;
+      color: var(--fg);
+      background: var(--surface);
+      border-color: var(--surface);
+      padding: var(--space-2) var(--space-3);
+    }
+    .notice {
+      padding: var(--space-5);
+      border: 1px solid var(--border-soft);
+      border-radius: var(--radius-lg);
+      background: color-mix(in oklab, var(--surface-warm) 44%, var(--bg));
+      color: var(--muted);
+    }
+    .macos-tip {
+      margin-top: var(--space-4);
+      background: var(--surface);
+    }
+    .macos-tip code {
+      overflow-wrap: anywhere;
+    }
+    .mac-command {
+      margin-top: var(--space-4);
+    }
+    .faq-list { display: grid; gap: var(--space-3); }
+    details {
+      border-top: 1px solid var(--border);
+      padding-block: var(--space-5);
+    }
+    details:last-child { border-bottom: 1px solid var(--border); }
+    summary {
+      cursor: pointer;
+      font-family: var(--font-display);
+      font-size: var(--text-xl);
+      font-weight: 500;
+      color: var(--fg);
+    }
+    details p { color: var(--muted); margin: var(--space-3) 0 0; max-width: 72ch; }
+    .pagefoot {
+      padding-block: var(--space-12);
+      color: var(--muted);
+      font-size: var(--text-sm);
+      border-top: 1px solid var(--border);
+    }
+    .pagefoot .row-between { flex-wrap: wrap; }
+
+    @media (max-width: 1020px) {
+      .hero-split,
+      .grid-2,
+      .grid-3,
+      .grid-4,
+      .grid-2-1,
+      .grid-1-2,
+      .pain-grid,
+      .download-box,
+      .window-body,
+      .model-grid,
+      .screenshot-grid {
+        grid-template-columns: 1fr;
+      }
+      .installer-grid { align-items: start; }
+      .installer-copy,
+      .installer-aside { height: auto; }
+      .installer-copy .model-grid { flex: initial; }
+      .download-copy,
+      .download-actions {
+        height: auto;
+        min-height: 0;
+      }
+      .topnav nav { display: none; }
+      .section { padding-block: var(--section-y-tablet); }
+      .container { padding-inline: var(--container-gutter-tablet); }
+    }
+    @media (max-width: 640px) {
+      .container { padding-inline: var(--container-gutter-phone); }
+      .section { padding-block: var(--section-y-phone); }
+      .topnav-inner { min-height: 60px; }
+      .topnav-actions .btn-secondary { display: none; }
+      .topnav .logo { font-size: 18px; }
+      .hero { padding-block: var(--section-y-tablet); }
+      .hero-cta, .hero-cta .btn { width: 100%; }
+      .row, .row-between { align-items: flex-start; flex-direction: column; }
+      .card, .product-shot { padding: var(--space-5); }
+      .window-top { flex-direction: column; align-items: flex-start; }
+      .compare-row { grid-template-columns: 1fr; gap: var(--space-2); }
+      .download-card { grid-template-columns: 1fr; }
+      .download-chip { justify-self: start; }
+      .command-box { flex-direction: column; align-items: stretch; }
+      .command-box .btn { width: 100%; }
+      .contact-card { grid-template-columns: 1fr; }
+      .wechat-qr { width: min(188px, 100%); }
+      .wechat-figure figcaption { text-align: left; }
+    }
+  </style>
+<style data-od-tweaks-bridge-style="">
+[data-od-tweaks-hidden] .tw-panel {
+  transform: translateX(calc(100% + 32px)) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+.tw-restore { display: none !important; }
+</style><script data-od-tweaks-bridge="">(function(){
+  // Synchronously hide BEFORE the artifact body parses so the panel never
+  // flashes on initial paint. The host removes the attribute via postMessage
+  // once it knows the desired state.
+  document.documentElement.setAttribute('data-od-tweaks-hidden', '');
+
+  var suppressEcho = false;
+  var observer = null;
+
+  function panelEl(){ return document.querySelector('.tw-panel'); }
+
+  function applyClassesToPanel(visible){
+    var panel = panelEl();
+    if (panel) panel.classList.toggle('tw-hidden', !visible);
+  }
+
+  function setPanelVisible(visible){
+    suppressEcho = true;
+    document.documentElement.toggleAttribute('data-od-tweaks-hidden', !visible);
+    applyClassesToPanel(visible);
+    // Clear flag after the MutationObserver has had a chance to fire for this
+    // change so we don't echo our own host-driven toggles back to the host.
+    Promise.resolve().then(function(){ suppressEcho = false; });
+  }
+
+  function postState(){
+    var panel = panelEl();
+    if (!panel) return;
+    try {
+      parent.postMessage({
+        type: 'od:tweaks-panel-state',
+        visible: !panel.classList.contains('tw-hidden'),
+      }, '*');
+    } catch (e) {}
+  }
+
+  function postAvailability(){
+    try {
+      parent.postMessage({
+        type: 'od:tweaks-available',
+        available: !!panelEl(),
+      }, '*');
+    } catch (e) {}
+  }
+
+  function attachObserver(){
+    var panel = panelEl();
+    if (!panel || observer) return;
+    observer = new MutationObserver(function(){
+      if (suppressEcho) return;
+      postState();
+    });
+    observer.observe(panel, { attributes: true, attributeFilter: ['class'] });
+  }
+
+  function onReady(){
+    // Capture the panel authored visibility BEFORE we apply the host hidden
+    // attribute. The bridge sets data-od-tweaks-hidden synchronously in head
+    // (before the body parses), so on entry to onReady the attribute is
+    // always present even though the artifact may have authored the panel
+    // as default-visible. Reading the panel class first is the only place
+    // we can still observe the author intent. Then drive the attribute,
+    // classes, and posted state from that captured value so a default
+    // visible tw-panel reports visible:true and the toolbar toggle starts
+    // ON. Issue surfaced in PR #1643 review.
+    var panel = panelEl();
+    var initialVisible = !!panel && !panel.classList.contains('tw-hidden');
+    document.documentElement.toggleAttribute('data-od-tweaks-hidden', !initialVisible);
+    applyClassesToPanel(initialVisible);
+    attachObserver();
+    postAvailability();
+    // Post the captured initial visibility so the toolbar toggle reflects
+    // the default state on mount. Without this the toggle reads OFF while
+    // a default-visible tw-panel artifact clearly shows its panel and the
+    // user would have to click toggle-on then toggle-off to actually hide.
+    postState();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', onReady);
+  } else {
+    onReady();
+  }
+
+  window.addEventListener('message', function(ev){
+    if (!ev.data || ev.data.type !== 'od:tweaks-panel-visible') return;
+    setPanelVisible(!!ev.data.visible);
+  });
+})();</script></head>
+<body>
+  <header class="topnav" data-od-id="topnav">
+    <div class="container topnav-inner" data-od-id="path-0-0">
+      <a class="logo" href="landing.html" aria-label="Claude Code 一键安装器首页" data-od-id="path-0-0-0">Claude Code 安装器</a>
+      <nav aria-label="主导航" data-od-id="path-0-0-1">
+        <a href="#pain" data-od-id="path-0-0-1-0">为什么需要</a>
+        <a href="#work" data-od-id="path-0-0-1-1">安装器会做什么</a>
+        <a href="#screenshots" data-od-id="path-0-0-1-2">软件截图</a>
+        <a href="#contact" data-od-id="path-0-0-1-3">联系方式</a>
+        <a href="#questions" data-od-id="path-0-0-1-4">常见问题</a>
+      </nav>
+      <div class="topnav-actions">
+        <a class="btn btn-ghost" href="https://github.com/greek-zzf/claude-code-install" target="_blank" rel="noreferrer" data-od-id="path-0-0-2-0">GitHub</a>
+        <a class="btn btn-secondary" href="#download" data-od-id="path-0-0-2-1">下载软件</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="content" data-od-id="path-1">
+    <section class="section hero" data-od-id="hero-split">
+      <div class="container hero-split" data-od-id="path-1-0-0">
+        <div>
+          <p class="eyebrow">Claude Code + CC-Switch</p>
+          <h1 data-od-id="path-1-0-0-0-1">给中国大陆用户的一键可视化安装器。</h1>
+          <p class="lead">不用先学命令行，不用反复处理镜像源。打开安装器，按步骤完成 Claude Code、CC-Switch 和国产模型配置。</p>
+          <div class="hero-cta" style="margin-top: var(--space-8);">
+            <a class="btn btn-primary" href="#download" data-od-id="path-1-0-0-0-3-0">下载软件</a>
+            <a class="btn btn-ghost btn-arrow" href="https://github.com/greek-zzf/claude-code-install" target="_blank" rel="noreferrer" data-od-id="path-1-0-0-0-3-1">查看开源仓库</a>
+          </div>
+          <div class="trust-row" aria-label="关键支持信息">
+            <span class="tag">Windows 安装包</span>
+            <span class="tag">macOS DMG</span>
+            <span class="tag">国内镜像源</span>
+            <span class="tag">国产模型配置</span>
+          </div>
+        </div>
+
+        <figure class="screenshot-frame" aria-label="Claude Code 安装助手启动界面截图">
+          <img src="mpxqg2lk-claude-1.png" alt="Claude Code 安装助手启动界面，显示开始安装按钮和当前 macOS arm64 系统信息" width="2116" height="1636">
+          <figcaption>真实软件截图：启动后直接进入可视化安装流程。</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" data-od-id="features">
+      <div class="container stack" style="gap: var(--space-12);" data-od-id="path-1-1-0">
+        <div class="section-intro">
+          <p class="eyebrow">为什么它更适合新手</p>
+          <h2 data-od-id="path-1-1-0-0-1">把安装 Claude Code 时最容易出错的环节收进一个流程。</h2>
+        </div>
+        <div class="grid-3">
+          <div class="feature card-flat">
+            <div class="feature-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="4" y="5" width="16" height="14" rx="2"></rect><path d="M8 9h8M8 13h5"></path></svg>
+            </div>
+            <h3 data-od-id="path-1-1-0-1-0-1">可视化安装</h3>
+            <p>不要求用户先理解终端、npm 或 PATH。按窗口提示完成安装，适合不会命令行的新手用户。</p>
+          </div>
+          <div class="feature card-flat">
+            <div class="feature-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h16M6 7v10h12V7"></path><path d="M8 17v2h8v-2"></path></svg>
+            </div>
+            <h3 data-od-id="path-1-1-0-1-1-1">多平台覆盖</h3>
+            <p>README 已提供 Windows 安装包与 macOS DMG，同时保留脚本安装方式，给进阶用户继续使用。</p>
+          </div>
+          <div class="feature card-flat">
+            <div class="feature-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M6 18 18 6M7 7h5v5M17 17h-5v-5"></path></svg>
+            </div>
+            <h3 data-od-id="path-1-1-0-1-2-1">国内网络友好</h3>
+            <p>安装流程使用淘宝 NPM、清华镜像、Gitee HomebrewCN 和 GitHub 代理镜像，降低网络环境带来的失败率。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="screenshots" data-od-id="screenshots">
+      <div class="container" data-od-id="path-1-2-0">
+        <div class="section-intro">
+          <p class="eyebrow">软件截图</p>
+          <h2 data-od-id="path-1-2-0-0-1">把原本分散在终端里的安装步骤，变成可确认的界面。</h2>
+          <p class="lead" style="margin-top: var(--space-5);">用户能看到当前系统环境、需要安装的组件，以及后续模型选择和完成后的启动指引。</p>
+        </div>
+        <div class="screenshot-grid">
+          <article class="screenshot-card" data-od-id="path-1-2-0-1-0">
+            <figure class="screenshot-frame">
+              <img src="mpxqg2n5-claude-2.png" alt="环境检测界面，列出磁盘空间、Homebrew、Node.js、Git、Claude Code 和 CC-Switch 状态" width="2116" height="1636" loading="lazy">
+              <figcaption>环境检测</figcaption>
+            </figure>
+            <div>
+              <h3 data-od-id="path-1-2-0-1-0-1-0">先确认缺什么。</h3>
+              <p>Homebrew、Node.js、Git、Claude Code 和 CC-Switch 状态会集中展示，新手不用自己判断。</p>
+            </div>
+          </article>
+          <article class="screenshot-card" data-od-id="path-1-2-0-1-1">
+            <figure class="screenshot-frame">
+              <img src="mpxqg2mt-claude-3.png" alt="AI 模型选择界面，提供 DeepSeek、智谱 GLM-4 和通义千问选项" width="2116" height="1636" loading="lazy">
+              <figcaption>选择 AI 模型</figcaption>
+            </figure>
+            <div>
+              <h3 data-od-id="path-1-2-0-1-1-1-0">安装后继续配置模型。</h3>
+              <p>DeepSeek、智谱 GLM-4、通义千问等选项放在同一流程里，降低后续配置门槛。</p>
+            </div>
+          </article>
+          <article class="screenshot-card" data-od-id="path-1-2-0-1-2">
+            <figure class="screenshot-frame">
+              <img src="mpxqg2mf-claude-4.png" alt="安装完成界面，显示快速开始、图文教程、交流与支持，以及打开终端和打开 cc-switch 按钮" width="2116" height="1636" loading="lazy">
+              <figcaption>安装完成</figcaption>
+            </figure>
+            <div>
+              <h3 data-od-id="path-1-2-0-1-2-1-0">告诉用户下一步做什么。</h3>
+              <p>完成后给出打开终端、运行 claude 和启动 CC-Switch 的入口，避免装完后不知道怎么用。</p>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="pain" data-od-id="pain-solution">
+      <div class="container pain-grid" data-od-id="path-1-3-0">
+        <div class="compare-card">
+          <p class="eyebrow">Before</p>
+          <h2 data-od-id="path-1-3-0-0-1">手动安装经常卡在环境和网络。</h2>
+          <div style="margin-top: var(--space-8);">
+            <div class="compare-row">
+              <span class="meta">Node.js</span>
+              <span>版本不对、镜像源没切好，npm 安装 Claude Code 时失败。</span>
+            </div>
+            <div class="compare-row">
+              <span class="meta">Git / Homebrew</span>
+              <span>macOS 与 Windows 步骤不同，新手很难判断自己卡在哪一步。</span>
+            </div>
+            <div class="compare-row">
+              <span class="meta">模型 API</span>
+              <span>装好了 Claude Code，还要继续配置可用模型与 API Key。</span>
+            </div>
+          </div>
+        </div>
+        <div class="compare-card">
+          <p class="eyebrow">After</p>
+          <h2 data-od-id="path-1-3-0-1-1">安装器把步骤拆成可确认的任务。</h2>
+          <ul class="check-list">
+            <li>macOS 使用 Gitee HomebrewCN 与清华 Homebrew Bottles 镜像。</li>
+            <li>Node.js 20 LTS 使用清华镜像，Claude Code 使用淘宝 NPM 镜像。</li>
+            <li>Windows 自动处理 Git 依赖，并提供双击运行的安装方式。</li>
+            <li>安装 CC-Switch 后，可在桌面应用里切换 DeepSeek、智谱 GLM、通义千问等模型。</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="work" data-od-id="installer-flow">
+      <div class="container grid-2-1 installer-grid" data-od-id="path-1-4-0">
+        <div class="installer-copy">
+          <p class="eyebrow">安装器会做什么</p>
+          <h2 data-od-id="path-1-4-0-0-1">从系统依赖到模型配置，一次串起来。</h2>
+          <p class="lead" style="margin-top: var(--space-5);">目标不是重新发明 Claude Code，而是让中国大陆用户先顺利装上、能打开、能接入可用模型。</p>
+          <div class="model-grid" style="margin-top: var(--space-8);">
+            <div class="card model-card">
+              <span class="pill">推荐</span>
+              <h3 style="margin-top: var(--space-4);" data-od-id="path-1-4-0-0-3-0-1">DeepSeek</h3>
+              <p>国产顶级编程模型，README 中标注为推荐选择。</p>
+            </div>
+            <div class="card model-card">
+              <span class="pill">中文理解</span>
+              <h3 style="margin-top: var(--space-4);" data-od-id="path-1-4-0-0-3-1-1">智谱 GLM-4</h3>
+              <p>清华系模型，适合需要中文理解能力的用户。</p>
+            </div>
+            <div class="card model-card">
+              <span class="pill">阿里生态</span>
+              <h3 style="margin-top: var(--space-4);" data-od-id="path-1-4-0-0-3-2-1">通义千问</h3>
+              <p>通过 DashScope API Key 接入，生态完善。</p>
+            </div>
+          </div>
+        </div>
+        <aside class="card installer-aside" aria-label="支持组件" data-od-id="path-1-4-0-1">
+          <h3 data-od-id="path-1-4-0-1-0">自动处理的组件</h3>
+          <ul class="check-list">
+            <li>Homebrew，仅 macOS 需要。</li>
+            <li>Node.js 20 LTS。</li>
+            <li>Git，仅 Windows 需要。</li>
+            <li>Claude Code。</li>
+            <li>CC-Switch。</li>
+            <li>国产模型 API Key 配置。</li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+
+    <section class="section" id="download" data-od-id="download">
+      <div class="container download-box" data-od-id="path-1-5-0">
+        <div class="download-copy">
+          <p class="eyebrow">Download</p>
+          <h2 data-od-id="path-1-5-0-0-1">先下载对应系统的安装包。</h2>
+          <p class="lead" style="margin-top: var(--space-5);">根据你的电脑选择对应版本。Mac 用户如果不确定芯片，先在“关于本机”里查看是 Apple 芯片还是 Intel 芯片。</p>
+          <div class="notice" style="margin-top: var(--space-8);">
+            <strong style="color: var(--fg);">安全提示</strong>
+            <p style="margin: var(--space-2) 0 0;">README 说明：macOS 版本暂未签名，首次打开可能需要右键选择“打开”；Windows 首次运行可能出现 SmartScreen 提示。</p>
+          </div>
+          <div class="notice macos-tip">
+            <strong style="color: var(--fg);">macOS 用户安装提示</strong>
+            <p style="margin: var(--space-2) 0 0;">如果双击打开提示“已损坏，无法打开”，请在终端执行以下命令解锁：</p>
+            <div class="command-box mac-command" aria-label="macOS 解锁命令">
+              <code id="macUnlockCommand" data-od-id="path-1-5-0-0-4-2-0">sudo xattr -r -d com.apple.quarantine /Applications/Claude\ Code\ 安装助手.app</code>
+              <button class="btn" type="button" id="copyMacUnlock" data-od-id="path-1-5-0-0-4-2-1">复制命令</button>
+            </div>
+          </div>
+        </div>
+        <div class="download-actions" aria-label="安装包下载列表">
+          <a class="download-card primary-version" href="https://gitee.com/geek-zzf/claude-code-install/releases/download/v1.0.4/Claude.Code.-1.0.0-arm64.dmg" target="_blank" rel="noreferrer" data-od-id="path-1-5-0-1-0">
+            <span>
+              <strong>Mac ARM 版</strong>
+              <span class="download-desc">适用于 Apple Silicon：M1 / M2 / M3 / M4 系列芯片。</span>
+              <code>Claude.Code.-1.0.0-arm64.dmg</code>
+            </span>
+            <span class="download-chip" aria-hidden="true">下载</span>
+          </a>
+          <a class="download-card" href="https://gitee.com/geek-zzf/claude-code-install/releases/download/v1.0.4/Claude.Code.Setup.1.0.0.exe" target="_blank" rel="noreferrer" data-od-id="path-1-5-0-1-1">
+            <span>
+              <strong>Windows 版</strong>
+              <span class="download-desc">适用于 Windows 用户，下载后双击安装包启动安装。</span>
+              <code>Claude.Code.Setup.1.0.0.exe</code>
+            </span>
+            <span class="download-chip" aria-hidden="true">下载</span>
+          </a>
+          <a class="download-card" href="https://gitee.com/geek-zzf/claude-code-install/releases/download/v1.0.4/Claude.Code.-1.0.0.dmg" target="_blank" rel="noreferrer" data-od-id="path-1-5-0-1-2">
+            <span>
+              <strong>Mac Intel 版</strong>
+              <span class="download-desc">适用于 Intel 芯片的 Mac 电脑。</span>
+              <code>Claude.Code.-1.0.0.dmg</code>
+            </span>
+            <span class="download-chip" aria-hidden="true">下载</span>
+          </a>
+          <div class="command-box" aria-label="脚本安装命令">
+            <code id="installCommand" data-od-id="path-1-5-0-1-3-0">bash scripts/install.sh</code>
+            <button class="btn" type="button" id="copyCommand" data-od-id="path-1-5-0-1-3-1">复制脚本命令</button>
+          </div>
+          <p class="meta">安装包来自 Gitee Releases，可减少 GitHub 下载不稳定带来的影响。</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="contact" data-od-id="contact">
+      <div class="container contact-card" data-od-id="path-1-6-0">
+        <div>
+          <p class="eyebrow">Contact</p>
+          <h2 data-od-id="path-1-6-0-0-1">安装中遇到问题，可以关注公众号继续跟进。</h2>
+          <p class="lead">我会把 GitHub 下载、国内镜像配置、macOS 打开权限和模型切换相关的更新说明，放在公众号里同步。</p>
+          <div class="contact-actions">
+            <a class="btn btn-primary" href="#download" data-od-id="path-1-6-0-0-3-0">先下载软件</a>
+            <a class="btn btn-ghost btn-arrow" href="https://github.com/greek-zzf/claude-code-install/issues" target="_blank" rel="noreferrer" data-od-id="path-1-6-0-0-3-1">提交 GitHub Issue</a>
+          </div>
+        </div>
+        <figure class="wechat-figure">
+          <div class="wechat-qr">
+            <img src="mpxo7vyz-EDAFA32A-F0DD-4118-B55F-F712A6FEA631.jpeg" alt="作者公众号二维码" width="430" height="430" loading="lazy">
+          </div>
+          <figcaption>微信扫码关注公众号</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section" id="questions" data-od-id="faq">
+      <div class="container grid-1-2" data-od-id="path-1-7-0">
+        <div>
+          <p class="eyebrow">FAQ</p>
+          <h2 data-od-id="path-1-7-0-0-1">安装前最该知道的几件事。</h2>
+        </div>
+        <div class="faq-list">
+          <details open="">
+            <summary>安装完成后输入 claude 找不到命令怎么办？</summary>
+            <p>README 建议关闭当前终端，重新打开一个新终端窗口后再试。如果仍然不行，再检查全局安装是否成功。</p>
+          </details>
+          <details>
+            <summary>提示 403 错误是什么意思？</summary>
+            <p>通常是当前模型 API 配置有问题。可以打开 CC-Switch 检查 API Key，或切换到其他模型。</p>
+          </details>
+          <details>
+            <summary>macOS 提示“已损坏，无法打开”怎么办？</summary>
+            <p>这是 macOS 对未签名应用的隔离提示。确认安装包来源后，在终端执行下面命令解除隔离，再重新打开应用。</p>
+            <div class="command-box mac-command" aria-label="macOS 已损坏提示解锁命令">
+              <code id="faqMacUnlockCommand" data-od-id="path-1-7-0-1-2-2-0">sudo xattr -r -d com.apple.quarantine /Applications/Claude\ Code\ 安装助手.app</code>
+              <button class="btn" type="button" id="copyFaqMacUnlock" data-od-id="path-1-7-0-1-2-2-1">复制命令</button>
+            </div>
+          </details>
+          <details>
+            <summary>完全不会命令行，可以用吗？</summary>
+            <p>可以。这个项目同时提供可视化安装器和脚本安装。新手优先下载 Windows 安装包或 macOS DMG。</p>
+          </details>
+          <details>
+            <summary>为什么还要安装 CC-Switch？</summary>
+            <p>CC-Switch 用来管理和切换模型。安装完成后，可以用 DeepSeek、智谱 GLM、通义千问等模型驱动 Claude Code。</p>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-od-id="cta-strip" style="text-align: center;">
+      <div class="container" style="max-width: 680px;" data-od-id="path-1-8-0">
+        <h2 data-od-id="path-1-8-0-0">让 Claude Code 先跑起来。</h2>
+        <p class="lead" style="margin: var(--space-4) auto var(--space-8);">不用先把每个环境问题都学会。下载安装器，按步骤完成依赖、镜像和模型配置。</p>
+        <a class="btn btn-primary" href="#download" data-od-id="path-1-8-0-2">选择安装包</a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="pagefoot" data-od-id="footer">
+    <div class="container row-between" data-od-id="path-2-0">
+      <span>Claude Code + CC-Switch 一键安装器</span>
+      <span class="meta">开源项目 · 面向中国大陆用户 · MIT License</span>
+    </div>
+  </footer>
+
+  <script>
+    function bindCopyButton(buttonSelector, textSelector, resetLabel) {
+      const button = document.querySelector(buttonSelector);
+      const source = document.querySelector(textSelector);
+      if (!button || !source) return;
+
+      button.addEventListener("click", async () => {
+        const text = source.textContent;
+        try {
+          await navigator.clipboard.writeText(text);
+          button.textContent = "已复制";
+        } catch (error) {
+          const helper = document.createElement("textarea");
+          helper.value = text;
+          helper.setAttribute("readonly", "");
+          helper.style.position = "fixed";
+          helper.style.left = "-9999px";
+          document.body.appendChild(helper);
+          helper.select();
+          document.execCommand("copy");
+          helper.remove();
+          button.textContent = "已复制";
+        }
+        window.setTimeout(() => {
+          button.textContent = resetLabel;
+        }, 1600);
+      });
+    }
+
+    bindCopyButton("#copyCommand", "#installCommand", "复制脚本命令");
+    bindCopyButton("#copyMacUnlock", "#macUnlockCommand", "复制命令");
+    bindCopyButton("#copyFaqMacUnlock", "#faqMacUnlockCommand", "复制命令");
+  </script>
+
+
+<script data-od-snapshot-bridge="">(function(){
+  function copyComputedStyle(source, target){
+    if (!source || !target || source.nodeType !== 1 || target.nodeType !== 1) return;
+    var computed = window.getComputedStyle(source);
+    var style = target.getAttribute('style') || '';
+    for (var i = 0; i < computed.length; i++){
+      var prop = computed[i];
+      style += prop + ':' + computed.getPropertyValue(prop) + ';';
+    }
+    target.setAttribute('style', style);
+  }
+  function syncElementState(source, target){
+    var tag = source.tagName ? source.tagName.toLowerCase() : '';
+    if (tag === 'img' && source.currentSrc) target.setAttribute('src', source.currentSrc);
+    if (tag === 'input' || tag === 'textarea') target.setAttribute('value', source.value || '');
+    if (tag === 'canvas') {
+      try {
+        var img = document.createElement('img');
+        img.setAttribute('src', source.toDataURL('image/png'));
+        img.setAttribute('style', target.getAttribute('style') || '');
+        target.parentNode && target.parentNode.replaceChild(img, target);
+      } catch (_) {}
+    }
+  }
+  function inlineSnapshotStyles(originalRoot, cloneRoot){
+    copyComputedStyle(originalRoot, cloneRoot);
+    syncElementState(originalRoot, cloneRoot);
+    var originals = originalRoot.querySelectorAll('*');
+    var clones = cloneRoot.querySelectorAll('*');
+    var count = Math.min(originals.length, clones.length);
+    for (var i = 0; i < count; i++){
+      copyComputedStyle(originals[i], clones[i]);
+      syncElementState(originals[i], clones[i]);
+    }
+    var scripts = cloneRoot.querySelectorAll('script');
+    for (var s = scripts.length - 1; s >= 0; s--) scripts[s].remove();
+  }
+  function waitForImages(){
+    var imgs = Array.prototype.slice.call(document.images || []);
+    return Promise.all(imgs.map(function(img){
+      if (img.complete) return Promise.resolve();
+      return new Promise(function(resolve){
+        img.addEventListener('load', resolve, { once: true });
+        img.addEventListener('error', resolve, { once: true });
+      });
+    }));
+  }
+  function renderSnapshot(id){
+    var w = Math.max(1, window.innerWidth || document.documentElement.clientWidth || 1);
+    var h = Math.max(1, window.innerHeight || document.documentElement.clientHeight || 1);
+    var dpr = window.devicePixelRatio || 1;
+    var docW = Math.max(w, document.documentElement.scrollWidth || 0, document.body ? document.body.scrollWidth : 0);
+    var docH = Math.max(h, document.documentElement.scrollHeight || 0, document.body ? document.body.scrollHeight : 0);
+    var clone = document.documentElement.cloneNode(true);
+    clone.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
+    inlineSnapshotStyles(document.documentElement, clone);
+    var serializer = new XMLSerializer();
+    var html = serializer.serializeToString(clone);
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+      '<foreignObject x="' + (-window.scrollX || 0) + '" y="' + (-window.scrollY || 0) + '" width="' + docW + '" height="' + docH + '">' +
+      html +
+      '</foreignObject></svg>';
+    var img = new Image();
+    img.onload = function(){
+      try {
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.floor(w * dpr));
+        canvas.height = Math.max(1, Math.floor(h * dpr));
+        var ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('no 2d context');
+        ctx.scale(dpr, dpr);
+        ctx.drawImage(img, 0, 0, w, h);
+        window.parent.postMessage({ type: 'od:snapshot:result', id: id, dataUrl: canvas.toDataURL('image/png'), w: canvas.width, h: canvas.height }, '*');
+      } catch (err) {
+        window.parent.postMessage({ type: 'od:snapshot:result', id: id, error: String(err && err.message || err) }, '*');
+      }
+    };
+    img.onerror = function(){
+      window.parent.postMessage({ type: 'od:snapshot:result', id: id, error: 'snapshot image failed' }, '*');
+    };
+    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  }
+  window.addEventListener('message', function(ev){
+    var data = ev && ev.data;
+    if (!data || data.type !== 'od:snapshot' || !data.id) return;
+    waitForImages().then(function(){ renderSnapshot(String(data.id)); });
+  });
+})();</script><script data-od-srcdoc-transport-activation="">(function(){
+  window.addEventListener('message', function(ev){
+    var data = ev && ev.data;
+    if (!data || data.type !== 'od:srcdoc-transport-activate' || typeof data.html !== 'string') return;
+    document.open();
+    document.write(data.html);
+    document.close();
+  });
+})();</script></body></html>
