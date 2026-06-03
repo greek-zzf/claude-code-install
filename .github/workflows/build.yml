@@ -32,9 +32,10 @@ jobs:
           npm ci
 
       - name: Build & Package App
-        # 在 Windows 上打包 exe，在 Mac 上打包 dmg (包含 Intel 和 M芯片通用版本)
+        # 先运行编译，再在 Windows 上打包 exe，在 Mac 上打包 dmg
         run: |
           cd gui
+          npm run build
           if [ "${{ matrix.os }}" = "macos-latest" ]; then
             npx electron-builder --mac --x64 --arm64
           else
