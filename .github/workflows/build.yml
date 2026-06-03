@@ -79,17 +79,30 @@ jobs:
         run: |
           echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
           
-          # 伪装为 Chrome 浏览器，防止 WAF 针对 curl 默认特征在 TLS 握手时直接挂起
+          # 伪装为 Chrome 浏览器，且通过 POST Body (Form Data) 传参以避免 400 Bad Request
           RELEASE_JSON=$(curl -4 -v -X POST -m 45 --connect-timeout 20 --retry 2 \
             -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
             -H "Accept: application/json" \
             -H "Connection: keep-alive" \
-            "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&tag_name=${{ github.ref_name }}&name=Release%20${{ github.ref_name }}") || {
+            --data-urlencode "access_token=${{ secrets.GITEE_TOKEN }}" \
+            --data-urlencode "tag_name=${{ github.ref_name }}" \
+            --data-urlencode "name=Release ${{ github.ref_name }}" \
+            "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases") || {
               echo "Warning: Gitee API is blocked by WAF (TLS timeout). Skipping Gitee sync."
               exit 0
             }
           
-          RELEASE_ID=$(echo "$RELEASE_JSON" | grep -o '"id":[0-9]*' | head -n 1 | cut -d: -f2)
+          # 使用 Node.js 解析 JSON，避免 grep 找不到匹配项导致 set -e 直接退出脚本
+          RELEASE_ID=$(echo "$RELEASE_JSON" | node -e '
+            let data = "";
+            process.stdin.on("data", chunk => data += chunk);
+            process.stdin.on("end", () => {
+              try {
+                const res = JSON.parse(data);
+                if (res && res.id) process.stdout.write(res.id.toString());
+              } catch(e) {}
+            });
+          ')
           
           if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
             echo "Failed to create release (possibly already exists). Fetching existing release ID..."
