@@ -69,6 +69,8 @@ jobs:
     name: Upload Release to Cloudflare R2
     needs: release
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
