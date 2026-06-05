@@ -65,8 +65,8 @@ jobs:
             gui/release/*.dmg
             gui/release/*.exe
 
-  sync-to-gitee:
-    name: Sync Release to Gitee
+  upload-to-r2:
+    name: Upload Release to Cloudflare R2
     needs: release
     runs-on: ubuntu-latest
     steps:
@@ -80,82 +80,22 @@ jobs:
         with:
           path: artifacts
 
-      - name: Upload to Gitee via API
+      - name: Upload to Cloudflare R2
         run: |
-          echo "Creating Gitee Release for tag ${{ github.ref_name }}..."
+          # 配置 AWS CLI
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }} --profile r2
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }} --profile r2
           
-          # 伪装为 Chrome 浏览器，且通过 POST Body (Form Data) 传参以避免 400 Bad Request
-          RELEASE_JSON=$(curl -4 -v -X POST -m 45 --connect-timeout 20 --retry 2 \
-            -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-            -H "Accept: application/json" \
-            -H "Connection: keep-alive" \
-            --data-urlencode "access_token=${{ secrets.GITEE_TOKEN }}" \
-            --data-urlencode "tag_name=${{ github.ref_name }}" \
-            --data-urlencode "name=Release ${{ github.ref_name }}" \
-            --data-urlencode "body=Release ${{ github.ref_name }}" \
-            --data-urlencode "target_commitish=main" \
-            "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases") || {
-              echo "Warning: Gitee API is blocked by WAF (TLS timeout). Skipping Gitee sync."
-              exit 0
-            }
-          
-          # 使用 Node.js 解析 JSON，避免 grep 找不到匹配项导致 set -e 直接退出脚本
-          RELEASE_ID=$(echo "$RELEASE_JSON" | node -e '
-            let data = "";
-            process.stdin.on("data", chunk => data += chunk);
-            process.stdin.on("end", () => {
-              try {
-                const res = JSON.parse(data);
-                if (res && res.id) process.stdout.write(res.id.toString());
-              } catch(e) {}
-            });
-          ')
-          
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "null" ]; then
-            echo "Failed to create release (possibly already exists). Fetching existing release ID..."
-            RELEASES_LIST=$(curl -4 -v -m 30 --connect-timeout 15 --retry 2 \
-              -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-              -H "Accept: application/json" \
-              "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases?access_token=${{ secrets.GITEE_TOKEN }}&page=1&per_page=20") || {
-                echo "Warning: Gitee API fetching failed. Skipping Gitee sync."
-                exit 0
-              }
-            RELEASE_ID=$(echo "$RELEASES_LIST" | node -e '
-              let data = "";
-              process.stdin.on("data", chunk => data += chunk);
-              process.stdin.on("end", () => {
-                try {
-                  const list = JSON.parse(data);
-                  const rel = list.find(r => r.tag_name === process.argv[1]);
-                  if (rel) process.stdout.write(rel.id.toString());
-                } catch(e) {}
-              });
-            ' "${{ github.ref_name }}")
-          fi
-          
-          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "undefined" ]; then
-            echo "Warning: Could not retrieve Gitee Release ID (WAF block or API error). Skipping Gitee sync."
-            echo "API Response: $RELEASE_JSON"
-            exit 0
-          fi
-          
-          echo "Using Gitee Release ID: $RELEASE_ID"
-          
+          # 上传附件到 R2
           find artifacts -type f \( -name "*.dmg" -o -name "*.exe" \) | while read filepath; do
             filename=$(basename "$filepath")
-            echo "Uploading $filename to Gitee..."
-            UPLOAD_RESP=$(curl -4 -v -X POST -m 180 --connect-timeout 30 --retry 3 \
-              -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" \
-              -H "Connection: keep-alive" \
-              -F "access_token=${{ secrets.GITEE_TOKEN }}" \
-              -F "file=@$filepath" \
-              "https://gitee.com/api/v5/repos/geek-zzf/claude-code-install/releases/$RELEASE_ID/attach_files") || {
-                echo "Warning: Failed to upload artifact $filename to Gitee. Skipping."
-                continue
-              }
-            echo "Response: $UPLOAD_RESP"
+            echo "Uploading $filename to Cloudflare R2..."
+            aws s3 cp "$filepath" "s3://${{ env.R2_BUCKET }}/${{ github.ref_name }}/$filename" \
+              --endpoint-url "https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com" \
+              --profile r2
           done
-        shell: bash
+        env:
+          R2_BUCKET: claude-code-installer # 如果你的 R2 存储桶不是这个名字，请修改这里
 
       - name: Update index.html Download Links
         run: |
@@ -165,7 +105,7 @@ jobs:
           node -e "
             const fs = require('fs');
             let content = fs.readFileSync('index.html', 'utf8');
-            content = content.replace(/\/releases\/download\/v[^\/]+\//g, '/releases/download/' + process.env.TAG_NAME + '/');
+            content = content.replace(/https:\/\/download\.felix\.garden\/v[^\/]+\//g, 'https://download.felix.garden/' + process.env.TAG_NAME + '/');
             content = content.replace(/Claude\.Code\.-[0-9.]+-arm64\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '-arm64.dmg');
             content = content.replace(/Claude\.Code\.Setup\.[0-9.]+\.exe/g, 'Claude.Code.Setup.' + process.env.APP_VERSION + '.exe');
             content = content.replace(/Claude\.Code\.-[0-9.]+\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '.dmg');
