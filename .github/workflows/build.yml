@@ -70,6 +70,11 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -151,3 +156,30 @@ jobs:
             echo "Response: $UPLOAD_RESP"
           done
         shell: bash
+
+      - name: Update index.html Download Links
+        run: |
+          export TAG_NAME="${{ github.ref_name }}"
+          export APP_VERSION=$(node -p "require('./gui/package.json').version")
+          echo "Updating index.html with Tag: $TAG_NAME, App Version: $APP_VERSION"
+          node -e "
+            const fs = require('fs');
+            let content = fs.readFileSync('index.html', 'utf8');
+            content = content.replace(/\/releases\/download\/v[^\/]+\//g, '/releases/download/' + process.env.TAG_NAME + '/');
+            content = content.replace(/Claude\.Code\.-[0-9.]+-arm64\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '-arm64.dmg');
+            content = content.replace(/Claude\.Code\.Setup\.[0-9.]+\.exe/g, 'Claude.Code.Setup.' + process.env.APP_VERSION + '.exe');
+            content = content.replace(/Claude\.Code\.-[0-9.]+\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '.dmg');
+            fs.writeFileSync('index.html', content);
+          "
+
+      - name: Commit & Push Changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --staged --quiet; then
+            echo "No changes in index.html to commit"
+          else
+            git commit -m "chore: update download links for ${{ github.ref_name }}"
+            git push origin main
+          fi
