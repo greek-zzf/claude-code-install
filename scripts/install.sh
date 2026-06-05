@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 # ── 镜像地址 ──────────────────────────────────────────────────────────────────
 NPM_MIRROR="https://registry.npmmirror.com"
 GHPROXY_MIRRORS=(
-    "https://mirror.ghproxy.com"
+    "https://ghp.ci"
     "https://gh-proxy.com"
     "https://ghproxy.net"
 )
