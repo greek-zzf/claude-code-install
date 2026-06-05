@@ -18,9 +18,9 @@ NC='\033[0m' # No Color
 # ── 镜像地址 ──────────────────────────────────────────────────────────────────
 NPM_MIRROR="https://registry.npmmirror.com"
 GHPROXY_MIRRORS=(
-    "https://ghp.ci"
     "https://gh-proxy.com"
     "https://ghproxy.net"
+    "https://ghp.ci"
 )
 NODE_MIRROR="https://npmmirror.com/mirrors/node/"
 
@@ -420,7 +420,7 @@ download_ccswitch_direct() {
 
     warn "cc-switch 自动安装失败"
     info "请手动下载安装: https://github.com/farion1231/cc-switch/releases"
-    info "提示：使用浏览器访问 https://mirror.ghproxy.com/https://github.com/farion1231/cc-switch/releases"
+    info "提示：使用浏览器访问 https://gh-proxy.com/https://github.com/farion1231/cc-switch/releases"
 }
 
 # ── Step 5: 配置模型 ──────────────────────────────────────────────────────────

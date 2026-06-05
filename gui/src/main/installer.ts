@@ -17,9 +17,9 @@ const HOMEBREW_BOTTLE_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/homebrew-bo
 const NODE_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/nodejs-release'
 const GIT_MIRROR = 'https://registry.npmmirror.com/-/binary/git-for-windows'
 const GHPROXY_MIRRORS = [
-  'https://ghp.ci',
   'https://gh-proxy.com',
-  'https://ghproxy.net'
+  'https://ghproxy.net',
+  'https://ghp.ci'
 ]
 
 function sendLog(step: string, line: string) {
