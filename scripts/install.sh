@@ -372,20 +372,28 @@ download_ccswitch_direct() {
     local ext="$1"
     info "正在通过 GitHub 镜像代理下载 cc-switch..."
 
-    # 获取最新版本号（通过 API）
-    local latest_url=""
+    # 获取最新版本号
+    local version="v3.16.1" # 默认兜底版本
+    if command_exists curl; then
+        local api_version
+        api_version=$(curl -s -f --connect-timeout 5 "https://api.github.com/repos/farion1231/cc-switch/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
+        if [[ -n "$api_version" ]]; then
+            version="$api_version"
+        fi
+    fi
+
+    local filename=""
+    if [[ "$ext" == "dmg" ]]; then
+        filename="CC-Switch-${version}-macOS.dmg"
+    elif [[ "$ext" == "AppImage" ]]; then
+        filename="CC-Switch-${version}-Linux-x86_64.AppImage"
+    fi
+
     local download_url=""
 
     for proxy in "${GHPROXY_MIRRORS[@]}"; do
         info "尝试镜像: ${proxy}"
-
-        # 尝试下载最新版本
-        if [[ "$ext" == "dmg" ]]; then
-            # macOS - 尝试常见文件名模式
-            download_url="${proxy}/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch.dmg"
-        else
-            download_url="${proxy}/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch.AppImage"
-        fi
+        download_url="${proxy}/https://github.com/farion1231/cc-switch/releases/download/${version}/${filename}"
 
         local tmp_file="/tmp/cc-switch.${ext}"
         if curl -fSL --progress-bar --connect-timeout 15 "$download_url" -o "$tmp_file" 2>/dev/null; then

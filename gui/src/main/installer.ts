@@ -241,10 +241,36 @@ async function installCCSwitchMac(): Promise<{ success: boolean; error?: string 
   return downloadCCSwitchDirect('dmg')
 }
 
+async function getLatestCCSwitchVersion(): Promise<string> {
+  const defaultVersion = 'v3.16.1'
+  try {
+    const response = await fetch('https://api.github.com/repos/farion1231/cc-switch/releases/latest', { signal: AbortSignal.timeout(5000) })
+    if (response.ok) {
+      const data = await response.json() as { tag_name: string }
+      if (data && data.tag_name) {
+        return data.tag_name
+      }
+    }
+  } catch {
+    // Ignore and return default
+  }
+  return defaultVersion
+}
+
 async function downloadCCSwitchDirect(ext: string): Promise<{ success: boolean; error?: string }> {
+  const version = await getLatestCCSwitchVersion()
+  
   for (const proxy of GHPROXY_MIRRORS) {
     sendLog('ccswitch', `尝试镜像: ${proxy}`)
-    const url = `${proxy}/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch.${ext}`
+    
+    let filename = ''
+    if (ext === 'dmg') {
+      filename = `CC-Switch-${version}-macOS.dmg`
+    } else {
+      filename = `CC-Switch-${version}-Windows.msi`
+    }
+
+    const url = `${proxy}/https://github.com/farion1231/cc-switch/releases/download/${version}/${filename}`
 
     if (ext === 'dmg') {
       const tmpPath = '/tmp/cc-switch.dmg'
@@ -263,11 +289,10 @@ async function downloadCCSwitchDirect(ext: string): Promise<{ success: boolean; 
       if (result.success) return result
     } else {
       // Windows MSI
-      const msiUrl = `${proxy}/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch-Windows-x64.msi`
       const msiPath = `${process.env.TEMP}\\cc-switch.msi`
       let result = await runCommand(
         'powershell',
-        ['-Command', `Invoke-WebRequest -Uri '${msiUrl}' -OutFile '${msiPath}' -UseBasicParsing -TimeoutSec 60`],
+        ['-Command', `Invoke-WebRequest -Uri '${url}' -OutFile '${msiPath}' -UseBasicParsing -TimeoutSec 60`],
         'ccswitch'
       )
       if (!result.success) continue
