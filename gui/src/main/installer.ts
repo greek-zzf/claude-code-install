@@ -72,7 +72,7 @@ function runCommand(
     }
 
     const child = spawn(cmd, args, {
-      shell: true,
+      shell: platform() === 'win32',
       env,
       ...opts
     })
@@ -105,27 +105,9 @@ function runCommand(
   })
 }
 
-async function installHomebrew(): Promise<{ success: boolean; error?: string }> {
-  sendLog('homebrew', '正在通过 Gitee 镜像安装 Homebrew...')
-  const result = await runCommand(
-    '/bin/zsh',
-    ['-c', `curl -fsSL ${HOMEBREW_GITEE} | /bin/zsh`],
-    'homebrew'
-  )
-  return result
-}
 
 async function installNodeJS(envCheck: EnvCheckResult): Promise<{ success: boolean; error?: string }> {
   const isMac = platform() === 'darwin'
-
-  if (isMac && envCheck.homebrew.installed) {
-    sendLog('nodejs', '通过 Homebrew 安装 Node.js 20 (清华镜像)...')
-    let result = await runCommand('brew', ['install', 'node@20'], 'nodejs')
-    if (result.success) {
-      await runCommand('brew', ['link', '--overwrite', 'node@20'], 'nodejs')
-    }
-    return result
-  }
 
   if (isMac) {
     // Download pkg directly
@@ -223,14 +205,7 @@ async function installClaudeCode(): Promise<{ success: boolean; error?: string }
 }
 
 async function installCCSwitchMac(): Promise<{ success: boolean; error?: string }> {
-  sendLog('ccswitch', '通过 Homebrew 安装 cc-switch...')
-  let result = await runCommand('brew', ['tap', 'farion1231/ccswitch'], 'ccswitch')
-  if (result.success) {
-    result = await runCommand('brew', ['install', '--cask', 'cc-switch'], 'ccswitch')
-    if (result.success) return result
-  }
-
-  // Fallback: ghproxy
+  // 直接下载 dmg，避免 brew cask 导致的速度瓶颈
   return downloadCCSwitchDirect('dmg')
 }
 
@@ -276,18 +251,7 @@ export async function runInstall(envCheck: EnvCheckResult): Promise<void> {
   const isMac = platform() === 'darwin'
   const isWin = platform() === 'win32'
 
-  // Step 1: Homebrew (macOS, if needed)
-  if (isMac && !envCheck.homebrew.installed) {
-    const result = await installHomebrew()
-    sendStepComplete('homebrew', result.success, result.error)
-    if (!result.success) {
-      sendLog('homebrew', '⚠️ Homebrew 安装失败，将使用备用方案安装 Node.js')
-    }
-  } else {
-    sendStepComplete('homebrew', true)
-  }
-
-  // Step 2: Node.js (if needed)
+  // Step 1: Node.js (if needed)
   if (!envCheck.nodejs.installed || envCheck.nodejs.needsUpgrade) {
     const result = await installNodeJS(envCheck)
     sendStepComplete('nodejs', result.success, result.error)

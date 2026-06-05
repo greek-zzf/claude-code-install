@@ -24,7 +24,6 @@ export default function EnvCheckPage({ onNext, onEnvChecked }: Props) {
     setItems([
       { key: 'os', name: '操作系统', icon: '⏳', status: '检测中...' },
       { key: 'disk', name: '磁盘空间', icon: '⏳', status: '检测中...' },
-      { key: 'homebrew', name: 'Homebrew', icon: '⏳', status: '检测中...' },
       { key: 'nodejs', name: 'Node.js', icon: '⏳', status: '检测中...' },
       { key: 'git', name: 'Git', icon: '⏳', status: '检测中...' },
       { key: 'claude', name: 'Claude Code', icon: '⏳', status: '检测中...' },
@@ -57,15 +56,6 @@ export default function EnvCheckPage({ onNext, onEnvChecked }: Props) {
         action: env.diskSpace.sufficient ? undefined : '空间不足'
       })
 
-      // Homebrew (mac only)
-      if (isMac) {
-        if (env.homebrew.installed) {
-          result.push({ key: 'homebrew', name: 'Homebrew', icon: '✅', status: env.homebrew.version || '已安装' })
-        } else {
-          result.push({ key: 'homebrew', name: 'Homebrew', icon: '📦', status: '未安装', action: '将自动安装' })
-          needs++
-        }
-      }
 
       // Node.js
       if (env.nodejs.installed && !env.nodejs.needsUpgrade) {

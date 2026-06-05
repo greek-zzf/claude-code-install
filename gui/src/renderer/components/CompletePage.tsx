@@ -112,23 +112,28 @@ export default function CompletePage() {
           <div className="quick-guide" style={{ margin: '0 auto', maxWidth: '440px' }}>
             <div className="quick-guide-step">
               <span className="quick-guide-num">1</span>
-              打开一个<strong>新的</strong>终端窗口
+              <div>
+                点击下方按钮启动 <strong>cc-switch</strong>，并在系统托盘（Mac 顶部菜单栏 / Win 右下角托盘）找到它的图标。
+              </div>
             </div>
             <div className="quick-guide-step">
               <span className="quick-guide-num">2</span>
-              输入 <code style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.15)', borderRadius: 4, fontFamily: 'monospace', color: '#a78bfa' }}>claude</code> 并回车
+              <div>
+                点击图标选择 <strong>DeepSeek</strong> 或其他国产模型，填入 <strong>API Key</strong> 并点击<strong>「启用」</strong>。
+              </div>
             </div>
             <div className="quick-guide-step">
               <span className="quick-guide-num">3</span>
-              开始使用 AI 编程助手！
+              <div>
+                打开一个<strong>新的</strong>终端窗口，输入 <code style={{ padding: '2px 8px', background: 'rgba(99,102,241,0.15)', borderRadius: 4, fontFamily: 'monospace', color: '#a78bfa' }}>claude</code> 并回车开始使用！
+              </div>
             </div>
           </div>
 
-          <div className="quick-guide" style={{ background: 'rgba(99,102,241,0.06)', margin: '0 auto', maxWidth: '440px' }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', marginBottom: 4, textAlign: 'left' }}>💡 cc-switch (模型切换器) 使用说明：</div>
+          <div className="quick-guide" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px dashed rgba(239, 68, 68, 0.25)', margin: '0 auto', maxWidth: '440px' }}>
+            <div style={{ fontWeight: 600, fontSize: 13, color: '#f87171', marginBottom: 4, textAlign: 'left' }}>⚠️ 重要提示（国内免翻墙必看）：</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'left', lineHeight: 1.5 }}>
-              1. 运行后它会以<strong>系统托盘图标</strong>形式驻留（macOS 在顶部菜单栏，Windows 在右下角托盘）。<br />
-              2. 点击其图标，即可随时在 DeepSeek、通义千问、官方 Claude 等模型间<strong>一键切换</strong>，或重新配置 API Key。
+              必须先通过 <strong>cc-switch</strong> 启用并配置好国产模型，然后打开<strong>新终端</strong>运行。否则 Claude Code 会直接连接官方服务器，导致网络超时或弹出无法访问的 OAuth 登录页面。
             </div>
           </div>
         </div>
@@ -242,7 +247,7 @@ export default function CompletePage() {
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
               <button 
-                onClick={() => window.electronAPI.openUrl('https://github.com/farion1231/cc-switch')}
+                onClick={() => window.electronAPI.openUrl('https://github.com/greek-zzf/claude-code-install')}
                 style={{
                   padding: '6px 12px',
                   fontSize: '11px',

@@ -17,9 +17,6 @@ NC='\033[0m' # No Color
 
 # ── 镜像地址 ──────────────────────────────────────────────────────────────────
 NPM_MIRROR="https://registry.npmmirror.com"
-HOMEBREW_GITEE_SCRIPT="https://gitee.com/cunkai/HomebrewCN/raw/master/Homebrew.sh"
-HOMEBREW_API_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api"
-HOMEBREW_BOTTLE_MIRROR="https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles"
 GHPROXY_MIRRORS=(
     "https://mirror.ghproxy.com"
     "https://gh-proxy.com"
@@ -28,7 +25,6 @@ GHPROXY_MIRRORS=(
 NODE_MIRROR="https://npmmirror.com/mirrors/node/"
 
 # ── 全局变量 ──────────────────────────────────────────────────────────────────
-NEED_HOMEBREW=false
 NEED_NODE=false
 NEED_GIT=false
 NEED_CLAUDE=false
@@ -100,7 +96,7 @@ load_models() {
 # ── Step 1: 环境检测 ──────────────────────────────────────────────────────────
 
 detect_env() {
-    step "1/6" "检测系统环境"
+    step "1/5" "检测系统环境"
 
     # OS
     OS_TYPE=$(uname -s)
@@ -149,16 +145,6 @@ detect_env() {
         success "磁盘空间: ${free_space}GB 可用"
     fi
 
-    # Homebrew (macOS only)
-    if [[ "$OS_TYPE" == "Darwin" ]]; then
-        if command_exists brew; then
-            success "Homebrew: $(brew --version | head -1)"
-        else
-            warn "Homebrew: 未安装 → 将自动安装（国内镜像）"
-            NEED_HOMEBREW=true
-        fi
-    fi
-
     # Git
     if command_exists git; then
         success "Git: $(git --version | awk '{print $3}')"
@@ -203,7 +189,7 @@ detect_env() {
     fi
 
     echo ""
-    if ! $NEED_HOMEBREW && ! $NEED_NODE && ! $NEED_GIT && ! $NEED_CLAUDE && ! $NEED_CCSWITCH; then
+    if ! $NEED_NODE && ! $NEED_GIT && ! $NEED_CLAUDE && ! $NEED_CCSWITCH; then
         success "所有组件已就绪！无需安装。"
         echo ""
         configure_model
@@ -212,97 +198,18 @@ detect_env() {
     fi
 }
 
-# ── Step 2: 安装 Homebrew ─────────────────────────────────────────────────────
 
-install_homebrew() {
-    if ! $NEED_HOMEBREW; then
-        return 0
-    fi
-
-    step "2/6" "安装 Homebrew（Gitee 国内镜像）"
-
-    info "正在从 Gitee 镜像下载 Homebrew 安装脚本..."
-    info "安装过程中可能需要输入开机密码（输入时不显示字符，输完回车即可）"
-    echo ""
-
-    # 使用 Gitee 镜像安装
-    /bin/zsh -c "$(curl -fsSL ${HOMEBREW_GITEE_SCRIPT})" </dev/tty || {
-        error "Homebrew 安装失败"
-        warn "尝试备用方案：直接下载 Node.js 安装包"
-        NEED_HOMEBREW=false
-        return 1
-    }
-
-    # 重新加载环境
-    if [[ -f "$HOME/.zprofile" ]]; then
-        source "$HOME/.zprofile" 2>/dev/null || true
-    fi
-    if [[ -f "$HOME/.bash_profile" ]]; then
-        source "$HOME/.bash_profile" 2>/dev/null || true
-    fi
-
-    # 确保 brew 在 PATH 中
-    if [[ -f "/opt/homebrew/bin/brew" ]]; then
-        eval "$(/opt/homebrew/bin/brew shellenv)"
-    elif [[ -f "/usr/local/bin/brew" ]]; then
-        eval "$(/usr/local/bin/brew shellenv)"
-    fi
-
-    if command_exists brew; then
-        success "Homebrew 安装完成"
-
-        # 配置清华镜像
-        export HOMEBREW_API_DOMAIN="${HOMEBREW_API_MIRROR}"
-        export HOMEBREW_BOTTLE_DOMAIN="${HOMEBREW_BOTTLE_MIRROR}"
-        info "已配置清华大学镜像源加速"
-    else
-        error "Homebrew 安装后未找到 brew 命令"
-        return 1
-    fi
-}
-
-# ── Step 3: 安装 Node.js ──────────────────────────────────────────────────────
+# ── Step 2: 安装 Node.js ──────────────────────────────────────────────────────
 
 install_nodejs() {
     if ! $NEED_NODE; then
         return 0
     fi
 
-    step "3/6" "安装 Node.js 20 LTS"
+    step "2/5" "安装 Node.js 20 LTS"
 
-    # 配置 Homebrew 镜像环境变量
-    export HOMEBREW_API_DOMAIN="${HOMEBREW_API_MIRROR}"
-    export HOMEBREW_BOTTLE_DOMAIN="${HOMEBREW_BOTTLE_MIRROR}"
-
-    if command_exists brew; then
-        info "通过 Homebrew 安装 Node.js 20（清华镜像加速）..."
-        brew install node@20 2>&1 | while IFS= read -r line; do
-            echo -e "  ${DIM}${line}${NC}"
-        done
-
-        # 链接 node@20
-        brew link --overwrite node@20 2>/dev/null || true
-
-        if command_exists node; then
-            NODE_VERSION=$(node --version | tr -d 'v')
-            success "Node.js v${NODE_VERSION} 安装完成"
-        else
-            # 添加到 PATH
-            local node_path
-            node_path="$(brew --prefix node@20)/bin"
-            export PATH="${node_path}:${PATH}"
-            if command_exists node; then
-                NODE_VERSION=$(node --version | tr -d 'v')
-                success "Node.js v${NODE_VERSION} 安装完成"
-                info "请将以下内容添加到 ~/.zshrc："
-                echo -e "  ${DIM}export PATH=\"${node_path}:\$PATH\"${NC}"
-            else
-                error "Node.js 安装失败"
-                return 1
-            fi
-        fi
-    else
-        # Homebrew 不可用，直接下载 pkg 安装包
+    if [[ "$OS_TYPE" == "Darwin" ]]; then
+        # macOS: 直接下载 pkg 安装包
         info "通过清华镜像直接下载 Node.js 安装包..."
         local node_pkg_url="https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/v20.18.1/node-v20.18.1.pkg"
         local tmp_pkg="/tmp/nodejs-install.pkg"
@@ -327,16 +234,47 @@ install_nodejs() {
             error "Node.js 安装后未找到 node 命令"
             return 1
         fi
+    else
+        # Linux: 如果有 brew，通过 brew 安装，否则提示错误
+        if command_exists brew; then
+            info "通过 Homebrew 安装 Node.js 20..."
+            brew install node@20 2>&1 | while IFS= read -r line; do
+                echo -e "  ${DIM}${line}${NC}"
+            done
+
+            # 链接 node@20
+            brew link --overwrite node@20 2>/dev/null || true
+
+            if command_exists node; then
+                NODE_VERSION=$(node --version | tr -d 'v')
+                success "Node.js v${NODE_VERSION} 安装完成"
+            else
+                # 添加到 PATH
+                local node_path
+                node_path="$(brew --prefix node@20)/bin"
+                export PATH="${node_path}:${PATH}"
+                if command_exists node; then
+                    NODE_VERSION=$(node --version | tr -d 'v')
+                    success "Node.js v${NODE_VERSION} 安装完成"
+                else
+                    error "Node.js 安装失败"
+                    return 1
+                fi
+            fi
+        else
+            error "Linux 环境下未找到 Node.js 且未安装 Homebrew，请先手动安装 Node.js (>=18)"
+            return 1
+        fi
     fi
 }
 
-# ── Step 4: 安装 Claude Code ──────────────────────────────────────────────────
+# ── Step 3: 安装 Claude Code ──────────────────────────────────────────────────
 
 install_claude_code() {
     if ! $NEED_CLAUDE; then
         # 即使已安装，也检查更新
         if command_exists claude; then
-            step "4/6" "检查 Claude Code 更新"
+            step "3/5" "检查 Claude Code 更新"
             info "正在检查更新（淘宝镜像）..."
             npm update -g @anthropic-ai/claude-code --registry="${NPM_MIRROR}" 2>&1 | while IFS= read -r line; do
                 echo -e "  ${DIM}${line}${NC}"
@@ -346,7 +284,7 @@ install_claude_code() {
         return 0
     fi
 
-    step "4/6" "安装 Claude Code（淘宝 NPM 镜像）"
+    step "3/5" "安装 Claude Code（淘宝 NPM 镜像）"
 
     info "正在通过淘宝 NPM 镜像安装..."
 
@@ -404,14 +342,14 @@ install_claude_code() {
     fi
 }
 
-# ── Step 5: 安装 cc-switch ────────────────────────────────────────────────────
+# ── Step 4: 安装 cc-switch ────────────────────────────────────────────────────
 
 install_ccswitch() {
     if ! $NEED_CCSWITCH; then
         return 0
     fi
 
-    step "5/6" "安装 cc-switch"
+    step "4/5" "安装 cc-switch"
 
     if [[ "$OS_TYPE" == "Darwin" ]]; then
         install_ccswitch_mac
@@ -421,28 +359,7 @@ install_ccswitch() {
 }
 
 install_ccswitch_mac() {
-    if command_exists brew; then
-        info "通过 Homebrew 安装 cc-switch..."
-
-        # 配置 Homebrew 镜像
-        export HOMEBREW_API_DOMAIN="${HOMEBREW_API_MIRROR}"
-        export HOMEBREW_BOTTLE_DOMAIN="${HOMEBREW_BOTTLE_MIRROR}"
-
-        brew tap farion1231/ccswitch 2>&1 | while IFS= read -r line; do
-            echo -e "  ${DIM}${line}${NC}"
-        done
-
-        if brew install --cask cc-switch 2>&1 | while IFS= read -r line; do
-            echo -e "  ${DIM}${line}${NC}"
-        done; then
-            success "cc-switch 安装完成"
-            return 0
-        fi
-
-        warn "Homebrew Cask 安装失败，尝试直接下载..."
-    fi
-
-    # 回退：通过 ghproxy 下载 dmg
+    # 不再使用 Homebrew，直接通过 ghproxy 下载 dmg
     download_ccswitch_direct "dmg"
 }
 
@@ -498,10 +415,10 @@ download_ccswitch_direct() {
     info "提示：使用浏览器访问 https://mirror.ghproxy.com/https://github.com/farion1231/cc-switch/releases"
 }
 
-# ── Step 6: 配置模型 ──────────────────────────────────────────────────────────
+# ── Step 5: 配置模型 ──────────────────────────────────────────────────────────
 
 configure_model() {
-    step "6/6" "配置 AI 模型"
+    step "5/5" "配置 AI 模型"
 
     load_models
 
@@ -660,9 +577,6 @@ main() {
     read -rp "  按回车键开始安装，或 Ctrl+C 取消... " </dev/tty
 
     # 按顺序安装
-    if [[ "$OS_TYPE" == "Darwin" ]]; then
-        install_homebrew || true
-    fi
 
     install_nodejs || {
         error "Node.js 安装失败，无法继续"

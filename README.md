@@ -43,12 +43,11 @@ bash scripts/install.sh
 
 安装器会自动完成以下步骤：
 
-1. **安装 Homebrew**（仅 macOS，使用 Gitee 国内镜像）
-2. **安装 Node.js 20 LTS**（使用清华大学镜像）
-3. **安装 Git**（仅 Windows 需要，使用淘宝镜像）
-4. **安装 Claude Code**（使用淘宝 NPM 镜像）
-5. **安装 CC-Switch**（使用 GitHub 代理镜像）
-6. **配置 AI 模型**（选择国产模型 + 填入 API Key）
+1. **安装 Node.js 20 LTS**（使用清华大学镜像）
+2. **安装 Git**（仅 Windows 需要，使用淘宝镜像）
+3. **安装 Claude Code**（使用淘宝 NPM 镜像）
+4. **安装 CC-Switch**（使用 GitHub 代理镜像）
+5. **配置 AI 模型**（选择国产模型 + 填入 API Key）
 
 ## 支持的国产模型
 
@@ -100,8 +99,6 @@ A: 可能是镜像站临时不稳定。请等几分钟后重新运行安装脚�
 |------|--------|
 | NPM 包 | npmmirror.com（淘宝） |
 | Node.js | mirrors.tuna.tsinghua.edu.cn（清华） |
-| Homebrew | gitee.com/cunkai/HomebrewCN（Gitee） |
-| Homebrew Bottles | mirrors.tuna.tsinghua.edu.cn（清华） |
 | GitHub Releases | mirror.ghproxy.com（代理） |
 | Git for Windows | npmmirror.com（淘宝） |
 

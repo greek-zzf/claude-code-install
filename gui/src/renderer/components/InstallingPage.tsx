@@ -15,7 +15,6 @@ interface StepState {
 }
 
 const STEP_DEFS = [
-  { id: 'homebrew', name: '安装 Homebrew' },
   { id: 'nodejs', name: '安装 Node.js' },
   { id: 'git', name: '安装 Git' },
   { id: 'claude', name: '安装 Claude Code' },

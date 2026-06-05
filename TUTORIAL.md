@@ -20,7 +20,10 @@
 
 ## 第二步：使用 cc-switch 切换与配置模型
 
-**cc-switch** 是一个运行在系统托盘的轻量管理工具，它可以动态修改 Claude Code 的网络代理和模型接口。
+**cc-switch** 是一个运行在系统托盘的轻量管理工具，它会在本地启动一个中转代理服务（默认运行在 `http://127.0.0.1:15721`），负责将 Claude Code 的 Anthropic Messages 协议请求转换并路由给国内大模型（如 DeepSeek 等），并自动进行模型名称映射。
+
+> 💡 **为什么不能直接把 DeepSeek 的 API 地址写入 `settings.json`？**
+> 因为 Claude Code 强制发送 Anthropic 协议请求，并且请求中带有 `claude-3-5-sonnet` 模型参数。DeepSeek 官方 API 无法识别这些参数。必须通过 `cc-switch` 作为本地中继进行翻译，才能实现无缝接入。
 
 1. **启动软件**：
    * 在可视化安装器点击 **「打开 cc-switch」**，或者在应用程序中手动启动。
@@ -31,7 +34,7 @@
    * 点击托盘上的 cc-switch 图标，在菜单中选择你刚才挑选的模型（如 **DeepSeek**）。
    * 点击配置（Settings），在对应的模型输入框中粘贴你的 **API Key**，然后点击 **保存 (Save)**。
 4. **一键切换**：
-   * 再次点击托盘图标，勾选你配置好的模型（例如勾选 `DeepSeek`）。
+   * 再次点击托盘图标，勾选你配置好的模型（例如勾选 `DeepSeek`）。这时 `cc-switch` 会自动将本地代理地址写入 `~/.claude/settings.json` 中。
 
 ---
 

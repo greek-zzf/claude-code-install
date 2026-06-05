@@ -109,9 +109,12 @@ jobs:
             const fs = require('fs');
             let content = fs.readFileSync('index.html', 'utf8');
             content = content.replace(/https:\/\/download\.felix\.garden\/v[^\/]+\//g, 'https://download.felix.garden/' + process.env.TAG_NAME + '/');
-            content = content.replace(/Claude\.Code\.-[0-9.]+-arm64\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '-arm64.dmg');
-            content = content.replace(/Claude\.Code\.Setup\.[0-9.]+\.exe/g, 'Claude.Code.Setup.' + process.env.APP_VERSION + '.exe');
-            content = content.replace(/Claude\.Code\.-[0-9.]+\.dmg/g, 'Claude.Code.-' + process.env.APP_VERSION + '.dmg');
+            content = content.replace(/Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B-[0-9.]+-arm64\.dmg/g, 'Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B-' + process.env.APP_VERSION + '-arm64.dmg');
+            content = content.replace(/Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B%20Setup%20[0-9.]+\.exe/g, 'Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B%20Setup%20' + process.env.APP_VERSION + '.exe');
+            content = content.replace(/Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B-[0-9.]+\.dmg/g, 'Claude%20Code%20%E5%AE%89%E8%A3%85%E5%8A%A9%E6%89%8B-' + process.env.APP_VERSION + '.dmg');
+            content = content.replace(/Claude Code 安装助手-[0-9.]+-arm64\.dmg/g, 'Claude Code 安装助手-' + process.env.APP_VERSION + '-arm64.dmg');
+            content = content.replace(/Claude Code 安装助手 Setup [0-9.]+\.exe/g, 'Claude Code 安装助手 Setup ' + process.env.APP_VERSION + '.exe');
+            content = content.replace(/Claude Code 安装助手-[0-9.]+\.dmg/g, 'Claude Code 安装助手-' + process.env.APP_VERSION + '.dmg');
             fs.writeFileSync('index.html', content);
           "
 
