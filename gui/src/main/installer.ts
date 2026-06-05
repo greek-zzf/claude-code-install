@@ -1,12 +1,15 @@
 import { spawn, SpawnOptionsWithoutStdio } from 'child_process'
-import { platform } from 'os'
+import { platform, homedir } from 'os'
 import { BrowserWindow } from 'electron'
 import { EnvCheckResult } from './env-check'
+import { join } from 'path'
+import { existsSync, readdirSync } from 'fs'
 
 const NPM_MIRRORS = [
   'https://registry.npmmirror.com',
   'https://mirrors.cloud.tencent.com/npm/',
-  'https://mirrors.huaweicloud.com/repository/npm/'
+  'https://mirrors.huaweicloud.com/repository/npm/',
+  'https://registry.npmjs.org'
 ]
 const HOMEBREW_GITEE = 'https://gitee.com/cunkai/HomebrewCN/raw/master/Homebrew.sh'
 const HOMEBREW_API_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api'
@@ -36,8 +39,33 @@ function runCommand(
   opts?: SpawnOptionsWithoutStdio
 ): Promise<{ success: boolean; error?: string }> {
   return new Promise((resolve) => {
+    const pathDelimiter = platform() === 'win32' ? ';' : ':'
+    const pathKey = platform() === 'win32' ? 'Path' : 'PATH'
+    const extraPaths = platform() === 'darwin'
+      ? ['/opt/homebrew/bin', '/usr/local/bin']
+      : []
+
+    // Add NVM path if exists
+    if (platform() === 'darwin') {
+      const nvmDir = join(homedir(), '.nvm/versions/node')
+      if (existsSync(nvmDir)) {
+        try {
+          const versions = readdirSync(nvmDir)
+          if (versions.length > 0) {
+            versions.sort()
+            const latest = versions[versions.length - 1]
+            extraPaths.push(join(nvmDir, latest, 'bin'))
+          }
+        } catch {}
+      }
+    }
+
+    const currentPath = process.env[pathKey] || ''
+    const newPath = [...extraPaths, currentPath].filter(Boolean).join(pathDelimiter)
+
     const env = {
       ...process.env,
+      [pathKey]: newPath,
       HOMEBREW_API_DOMAIN: HOMEBREW_API_MIRROR,
       HOMEBREW_BOTTLE_DOMAIN: HOMEBREW_BOTTLE_MIRROR,
       ...opts?.env
@@ -178,7 +206,11 @@ async function installGit(): Promise<{ success: boolean; error?: string }> {
 
 async function installClaudeCode(): Promise<{ success: boolean; error?: string }> {
   for (const mirror of NPM_MIRRORS) {
-    sendLog('claude', `使用镜像: ${mirror}`)
+    if (mirror === 'https://registry.npmjs.org') {
+      sendLog('claude', `使用官方源作为最终兜底: ${mirror}`)
+    } else {
+      sendLog('claude', `使用镜像: ${mirror}`)
+    }
     const result = await runCommand(
       'npm',
       ['install', '-g', '@anthropic-ai/claude-code', `--registry=${mirror}`],

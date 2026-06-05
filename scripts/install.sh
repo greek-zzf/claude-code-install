@@ -350,19 +350,32 @@ install_claude_code() {
 
     info "正在通过淘宝 NPM 镜像安装..."
 
+    local use_sudo=""
+    local npm_prefix
+    npm_prefix=$(npm config get prefix 2>/dev/null || echo "/usr/local")
+    if [[ ! -w "$npm_prefix" ]] && [[ $EUID -ne 0 ]]; then
+        use_sudo="sudo"
+        info "检测到全局 Node 目录无写入权限，将尝试使用 sudo 进行安装..."
+    fi
+
     local retry=0
-    local max_retry=2
     local npm_mirrors=(
         "https://registry.npmmirror.com"
         "https://mirrors.cloud.tencent.com/npm/"
         "https://mirrors.huaweicloud.com/repository/npm/"
+        "https://registry.npmjs.org"
     )
+    local max_retry=$((${#npm_mirrors[@]} - 1))
 
     while [[ $retry -le $max_retry ]]; do
         local mirror="${npm_mirrors[$retry]}"
-        info "使用镜像: ${mirror}"
+        if [[ "$mirror" == "https://registry.npmjs.org" ]]; then
+            info "使用官方源作为最终兜底: ${mirror}"
+        else
+            info "使用镜像: ${mirror}"
+        fi
 
-        if npm install -g @anthropic-ai/claude-code --registry="${mirror}" 2>&1 | while IFS= read -r line; do
+        if $use_sudo npm install -g @anthropic-ai/claude-code --registry="${mirror}" 2>&1 | while IFS= read -r line; do
             echo -e "  ${DIM}${line}${NC}"
         done; then
             break
@@ -370,7 +383,7 @@ install_claude_code() {
 
         retry=$((retry + 1))
         if [[ $retry -le $max_retry ]]; then
-            warn "安装失败，尝试备用镜像 (${retry}/${max_retry})..."
+            warn "安装失败，尝试下一个源 (${retry}/${max_retry})..."
         fi
     done
 

@@ -312,17 +312,26 @@ function Install-ClaudeCode {
     $mirrors = @(
         "https://registry.npmmirror.com",
         "https://mirrors.cloud.tencent.com/npm/",
-        "https://mirrors.huaweicloud.com/repository/npm/"
+        "https://mirrors.huaweicloud.com/repository/npm/",
+        "https://registry.npmjs.org"
     )
 
     $installed = $false
     foreach ($mirror in $mirrors) {
-        Write-Info "使用镜像: $mirror"
+        if ($mirror -eq "https://registry.npmjs.org") {
+            Write-Info "使用官方源作为最终兜底: $mirror"
+        } else {
+            Write-Info "使用镜像: $mirror"
+        }
         try {
             $output = npm install -g @anthropic-ai/claude-code --registry="$mirror" 2>&1
             $output | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
-            $installed = $true
-            break
+            if ($LASTEXITCODE -eq 0) {
+                $installed = $true
+                break
+            } else {
+                Write-Warn "安装失败，尝试下一个镜像..."
+            }
         }
         catch {
             Write-Warn "安装失败，尝试下一个镜像..."
