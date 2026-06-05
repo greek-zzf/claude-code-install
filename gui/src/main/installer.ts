@@ -187,17 +187,49 @@ async function installGit(): Promise<{ success: boolean; error?: string }> {
 }
 
 async function installClaudeCode(): Promise<{ success: boolean; error?: string }> {
+  const isMac = platform() === 'darwin'
+  
+  // Find absolute npm path for macOS do shell script
+  let npmPath = 'npm'
+  if (isMac) {
+    if (existsSync('/usr/local/bin/npm')) {
+      npmPath = '/usr/local/bin/npm'
+    } else if (existsSync('/opt/homebrew/bin/npm')) {
+      npmPath = '/opt/homebrew/bin/npm'
+    }
+  }
+
   for (const mirror of NPM_MIRRORS) {
     if (mirror === 'https://registry.npmjs.org') {
       sendLog('claude', `使用官方源作为最终兜底: ${mirror}`)
     } else {
       sendLog('claude', `使用镜像: ${mirror}`)
     }
-    const result = await runCommand(
+    
+    // First, try running normally
+    let result = await runCommand(
       'npm',
       ['install', '-g', '@anthropic-ai/claude-code', `--registry=${mirror}`],
       'claude'
     )
+
+    // If it fails with permission error on Mac, try using osascript with administrator privileges
+    if (
+      !result.success &&
+      isMac &&
+      result.error &&
+      (result.error.includes('EACCES') ||
+        result.error.includes('permission') ||
+        result.error.includes('checkPermissions'))
+    ) {
+      sendLog('claude', '检测到全局安装权限不足，正在请求管理员权限安装...')
+      result = await runCommand(
+        'osascript',
+        ['-e', `do shell script "${npmPath} install -g @anthropic-ai/claude-code --registry=${mirror}" with administrator privileges`],
+        'claude'
+      )
+    }
+
     if (result.success) return result
     sendLog('claude', '此镜像失败，尝试下一个...')
   }
