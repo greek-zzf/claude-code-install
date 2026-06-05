@@ -138,10 +138,10 @@ async function installNodeJS(envCheck: EnvCheckResult): Promise<{ success: boole
     )
     if (!result.success) return result
 
-    sendLog('nodejs', '正在安装 Node.js...')
+    sendLog('nodejs', '正在安装 Node.js (需要管理员权限，请在系统弹窗中确认并输入密码)...')
     result = await runCommand(
-      'sudo',
-      ['installer', '-pkg', '/tmp/nodejs-install.pkg', '-target', '/'],
+      'osascript',
+      ['-e', 'do shell script "installer -pkg /tmp/nodejs-install.pkg -target /" with administrator privileges'],
       'nodejs'
     )
     return result
