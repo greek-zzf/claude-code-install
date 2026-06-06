@@ -6,8 +6,6 @@
     "recommended": true,
     "apiKeyUrl": "https://platform.deepseek.com/api_keys",
     "apiKeyGuide": "注册 DeepSeek 开放平台 → 控制台 → API Keys → 创建",
-    "baseUrl": "https://api.deepseek.com",
-    "modelId": "deepseek-coder",
     "pricing": "约 ¥0.001/千token"
   },
   {
@@ -17,8 +15,6 @@
     "recommended": false,
     "apiKeyUrl": "https://open.bigmodel.cn/usercenter/apikeys",
     "apiKeyGuide": "注册智谱 AI 开放平台 → 个人中心 → API Keys → 创建",
-    "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
-    "modelId": "glm-4-plus",
     "pricing": "约 ¥0.05/千token"
   },
   {
@@ -28,8 +24,6 @@
     "recommended": false,
     "apiKeyUrl": "https://dashscope.console.aliyun.com/apiKey",
     "apiKeyGuide": "注册阿里云 → 开通灵积模型服务 → API-KEY 管理 → 创建",
-    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "modelId": "qwen-max",
     "pricing": "约 ¥0.02/千token"
   }
 ]

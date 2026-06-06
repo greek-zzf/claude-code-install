@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
 #  Claude Code + CC-Switch 一键安装器 (macOS / Linux)
-#  适用于中国大陆用户，全程使用国内镜像，无需翻墙
+#  适用于中国大陆用户，优先使用国内镜像与 GitHub 代理
 # ============================================================================
 set -euo pipefail
 
@@ -20,9 +20,14 @@ NPM_MIRROR="https://registry.npmmirror.com"
 GHPROXY_MIRRORS=(
     "https://gh-proxy.com"
     "https://ghproxy.net"
-    "https://ghp.ci"
 )
-NODE_MIRROR="https://npmmirror.com/mirrors/node/"
+NODE_MIRRORS=(
+    "https://npmmirror.com/mirrors/node"
+    "https://mirrors.cloud.tencent.com/nodejs-release"
+    "https://repo.huaweicloud.com/nodejs"
+    "https://mirrors.tuna.tsinghua.edu.cn/nodejs-release"
+)
+NODE_LTS_VERSION="v20.18.1"
 
 # ── 全局变量 ──────────────────────────────────────────────────────────────────
 NEED_NODE=false
@@ -33,7 +38,6 @@ NODE_VERSION=""
 OS_TYPE=""
 OS_ARCH=""
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-MODELS_JSON=""
 
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
@@ -43,7 +47,7 @@ print_banner() {
     echo "  ╔══════════════════════════════════════════════════════════╗"
     echo "  ║                                                        ║"
     echo "  ║     🚀  Claude Code + CC-Switch 一键安装器              ║"
-    echo "  ║         适用于中国大陆用户 · 全程国内镜像               ║"
+    echo "  ║         适用于中国大陆用户 · 优先国内镜像               ║"
     echo "  ║                                                        ║"
     echo "  ╚══════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
@@ -77,20 +81,82 @@ version_gte() {
     printf '%s\n%s\n' "$2" "$1" | sort -V -C
 }
 
-# ── 加载模型配置 ──────────────────────────────────────────────────────────────
+ensure_path_in_profile() {
+    local bin_dir="$1"
+    local profile="$HOME/.zshrc"
 
-load_models() {
-    local models_file="${SCRIPT_DIR}/../shared/models.json"
-    if [[ -f "$models_file" ]]; then
-        MODELS_JSON=$(cat "$models_file")
-    else
-        # 内嵌默认配置
-        MODELS_JSON='[
-  {"id":"deepseek","name":"DeepSeek","description":"国产顶级编程模型，性价比极高","recommended":true,"apiKeyUrl":"https://platform.deepseek.com/api_keys","baseUrl":"https://api.deepseek.com","modelId":"deepseek-coder"},
-  {"id":"glm","name":"智谱 GLM-4","description":"清华系大模型，中文理解能力强","recommended":false,"apiKeyUrl":"https://open.bigmodel.cn/usercenter/apikeys","baseUrl":"https://open.bigmodel.cn/api/paas/v4","modelId":"glm-4-plus"},
-  {"id":"qwen","name":"通义千问","description":"阿里云大模型，生态完善","recommended":false,"apiKeyUrl":"https://dashscope.console.aliyun.com/apiKey","baseUrl":"https://dashscope.aliyuncs.com/compatible-mode/v1","modelId":"qwen-max"}
-]'
+    if [[ -n "${BASH_VERSION:-}" ]]; then
+        profile="$HOME/.bashrc"
     fi
+
+    mkdir -p "$(dirname "$profile")"
+    touch "$profile"
+    if ! grep -Fq "$bin_dir" "$profile"; then
+        {
+            echo ""
+            echo "# Claude Code installer: user-level npm/node bin"
+            echo "export PATH=\"${bin_dir}:\$PATH\""
+        } >> "$profile"
+        info "已将 ${bin_dir} 加入 ${profile}"
+    fi
+}
+
+ensure_user_npm_prefix() {
+    local npm_prefix
+    npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    if [[ -z "$npm_prefix" || "$npm_prefix" == "undefined" ]]; then
+        return 0
+    fi
+
+    if [[ ! -w "$npm_prefix" && $EUID -ne 0 ]]; then
+        local user_prefix="$HOME/.npm-global"
+        warn "全局 Node 目录无写入权限，切换到用户级 npm 目录: ${user_prefix}"
+        mkdir -p "${user_prefix}/bin"
+        npm config set prefix "$user_prefix"
+        export PATH="${user_prefix}/bin:${PATH}"
+        ensure_path_in_profile "${user_prefix}/bin"
+    fi
+}
+
+verify_claude_code() {
+    local npm_bin
+    npm_bin="$(npm config get prefix 2>/dev/null)/bin"
+    if [[ -d "$npm_bin" ]]; then
+        export PATH="${npm_bin}:${PATH}"
+    fi
+
+    if ! command_exists claude; then
+        error "Claude Code 安装后未找到 claude 命令"
+        return 1
+    fi
+
+    local version_output
+    if ! version_output=$(claude --version 2>&1); then
+        error "Claude Code 已安装但无法运行: ${version_output}"
+        return 1
+    fi
+
+    if echo "$version_output" | grep -qi "native binary"; then
+        error "Claude Code native binary 缺失，请确认 npm optional dependencies 未被禁用"
+        return 1
+    fi
+
+    success "Claude Code 安装完成: ${version_output}"
+}
+
+download_node_file() {
+    local filename="$1"
+    local output="$2"
+
+    for mirror in "${NODE_MIRRORS[@]}"; do
+        local url="${mirror}/${NODE_LTS_VERSION}/${filename}"
+        info "尝试 Node.js 镜像: ${mirror}"
+        if curl -fSL --progress-bar "$url" -o "$output"; then
+            return 0
+        fi
+    done
+
+    return 1
 }
 
 # ── Step 1: 环境检测 ──────────────────────────────────────────────────────────
@@ -149,8 +215,7 @@ detect_env() {
     if command_exists git; then
         success "Git: $(git --version | awk '{print $3}')"
     else
-        warn "Git: 未安装 → 将自动安装"
-        NEED_GIT=true
+        warn "Git: 未安装（建议通过系统包管理器手动安装）"
     fi
 
     # Node.js
@@ -210,11 +275,11 @@ install_nodejs() {
 
     if [[ "$OS_TYPE" == "Darwin" ]]; then
         # macOS: 直接下载 pkg 安装包
-        info "通过清华镜像直接下载 Node.js 安装包..."
-        local node_pkg_url="https://mirrors.tuna.tsinghua.edu.cn/nodejs-release/v20.18.1/node-v20.18.1.pkg"
+        info "通过 Node.js 镜像下载安装包..."
+        local node_pkg="node-${NODE_LTS_VERSION}.pkg"
         local tmp_pkg="/tmp/nodejs-install.pkg"
 
-        curl -fSL --progress-bar "$node_pkg_url" -o "$tmp_pkg" || {
+        download_node_file "$node_pkg" "$tmp_pkg" || {
             error "Node.js 下载失败"
             return 1
         }
@@ -235,34 +300,43 @@ install_nodejs() {
             return 1
         fi
     else
-        # Linux: 如果有 brew，通过 brew 安装，否则提示错误
-        if command_exists brew; then
-            info "通过 Homebrew 安装 Node.js 20..."
-            brew install node@20 2>&1 | while IFS= read -r line; do
-                echo -e "  ${DIM}${line}${NC}"
-            done
+        local node_arch=""
+        case "$OS_ARCH" in
+            x86_64|amd64) node_arch="x64" ;;
+            aarch64|arm64) node_arch="arm64" ;;
+            *)
+                error "暂不支持的 Linux 架构: ${OS_ARCH}"
+                return 1
+                ;;
+        esac
 
-            # 链接 node@20
-            brew link --overwrite node@20 2>/dev/null || true
+        local node_dir="$HOME/.local/nodejs"
+        local tarball="node-${NODE_LTS_VERSION}-linux-${node_arch}.tar.xz"
+        local tmp_tar="/tmp/${tarball}"
 
-            if command_exists node; then
-                NODE_VERSION=$(node --version | tr -d 'v')
-                success "Node.js v${NODE_VERSION} 安装完成"
-            else
-                # 添加到 PATH
-                local node_path
-                node_path="$(brew --prefix node@20)/bin"
-                export PATH="${node_path}:${PATH}"
-                if command_exists node; then
-                    NODE_VERSION=$(node --version | tr -d 'v')
-                    success "Node.js v${NODE_VERSION} 安装完成"
-                else
-                    error "Node.js 安装失败"
-                    return 1
-                fi
-            fi
+        info "通过 Node.js 镜像下载 Linux 压缩包..."
+        download_node_file "$tarball" "$tmp_tar" || {
+            error "Node.js 下载失败"
+            return 1
+        }
+
+        rm -rf "$node_dir"
+        mkdir -p "$node_dir"
+        tar -xJf "$tmp_tar" -C "$node_dir" --strip-components=1 || {
+            error "Node.js 解压失败"
+            rm -f "$tmp_tar"
+            return 1
+        }
+        rm -f "$tmp_tar"
+
+        export PATH="${node_dir}/bin:${PATH}"
+        ensure_path_in_profile "${node_dir}/bin"
+
+        if command_exists node; then
+            NODE_VERSION=$(node --version | tr -d 'v')
+            success "Node.js v${NODE_VERSION} 安装完成"
         else
-            error "Linux 环境下未找到 Node.js 且未安装 Homebrew，请先手动安装 Node.js (>=18)"
+            error "Node.js 安装失败"
             return 1
         fi
     fi
@@ -276,10 +350,11 @@ install_claude_code() {
         if command_exists claude; then
             step "3/5" "检查 Claude Code 更新"
             info "正在检查更新（淘宝镜像）..."
-            npm update -g @anthropic-ai/claude-code --registry="${NPM_MIRROR}" 2>&1 | while IFS= read -r line; do
+            ensure_user_npm_prefix
+            npm install -g @anthropic-ai/claude-code@latest --include=optional --registry="${NPM_MIRROR}" 2>&1 | while IFS= read -r line; do
                 echo -e "  ${DIM}${line}${NC}"
             done
-            success "Claude Code 已是最新版本"
+            verify_claude_code
         fi
         return 0
     fi
@@ -287,13 +362,13 @@ install_claude_code() {
     step "3/5" "安装 Claude Code（淘宝 NPM 镜像）"
 
     info "正在通过淘宝 NPM 镜像安装..."
+    ensure_user_npm_prefix
 
-    local use_sudo=""
+    # 清理残留临时目录防 npm ENOTEMPTY 报错
     local npm_prefix
-    npm_prefix=$(npm config get prefix 2>/dev/null || echo "/usr/local")
-    if [[ ! -w "$npm_prefix" ]] && [[ $EUID -ne 0 ]]; then
-        use_sudo="sudo"
-        info "检测到全局 Node 目录无写入权限，将尝试使用 sudo 进行安装..."
+    npm_prefix=$(npm config get prefix 2>/dev/null || true)
+    if [[ -n "$npm_prefix" && -d "${npm_prefix}/lib/node_modules/@anthropic-ai" ]]; then
+        find "${npm_prefix}/lib/node_modules/@anthropic-ai" -maxdepth 1 -name ".claude-code-*" -exec rm -rf {} + 2>/dev/null || true
     fi
 
     local retry=0
@@ -313,7 +388,7 @@ install_claude_code() {
             info "使用镜像: ${mirror}"
         fi
 
-        if $use_sudo npm install -g @anthropic-ai/claude-code --registry="${mirror}" 2>&1 | while IFS= read -r line; do
+        if npm install -g @anthropic-ai/claude-code@latest --include=optional --registry="${mirror}" 2>&1 | while IFS= read -r line; do
             echo -e "  ${DIM}${line}${NC}"
         done; then
             break
@@ -325,19 +400,9 @@ install_claude_code() {
         fi
     done
 
-    # 验证安装
-    # npm 全局 bin 可能不在 PATH 中
-    if ! command_exists claude; then
-        local npm_bin
-        npm_bin="$(npm config get prefix)/bin"
-        export PATH="${npm_bin}:${PATH}"
-    fi
-
-    if command_exists claude; then
-        success "Claude Code 安装完成: $(claude --version 2>/dev/null || echo '已安装')"
-    else
+    if ! verify_claude_code; then
         error "Claude Code 安装失败"
-        error "请尝试手动运行: npm install -g @anthropic-ai/claude-code --registry=${NPM_MIRROR}"
+        error "请尝试手动运行: npm install -g @anthropic-ai/claude-code@latest --include=optional --registry=${NPM_MIRROR}"
         return 1
     fi
 }
@@ -377,6 +442,14 @@ download_ccswitch_direct() {
     if command_exists curl; then
         local api_version
         api_version=$(curl -s -f --connect-timeout 5 "https://api.github.com/repos/farion1231/cc-switch/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
+        if [[ -z "$api_version" ]]; then
+            for proxy in "${GHPROXY_MIRRORS[@]}"; do
+                api_version=$(curl -s -f --connect-timeout 5 "${proxy}/https://api.github.com/repos/farion1231/cc-switch/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/') || true
+                if [[ -n "$api_version" ]]; then
+                    break
+                fi
+            done
+        fi
         if [[ -n "$api_version" ]]; then
             version="$api_version"
         fi
@@ -428,118 +501,23 @@ download_ccswitch_direct() {
 configure_model() {
     step "5/5" "配置 AI 模型"
 
-    load_models
-
     echo ""
-    echo -e "  ${BOLD}请选择默认使用的 AI 模型:${NC}"
+    echo -e "  ${BOLD}请通过 cc-switch 配置并启用国产模型。${NC}"
+    echo -e "  ${DIM}Claude Code 需要 Anthropic 协议接口；不要把国产模型地址直接写入 ~/.claude/settings.json。${NC}"
+    echo -e "  ${DIM}cc-switch 会负责协议转换，并在启用配置后写入本地代理地址。${NC}"
     echo ""
     echo -e "  ${GREEN}${BOLD}1)${NC} ${BOLD}DeepSeek${NC} ${GREEN}(推荐)${NC}"
-    echo -e "     ${DIM}国产顶级编程模型，性价比极高，约 ¥0.001/千token${NC}"
+    echo -e "     ${DIM}API Key: https://platform.deepseek.com/api_keys${NC}"
     echo ""
     echo -e "  ${BOLD}2)${NC} ${BOLD}智谱 GLM-4${NC}"
-    echo -e "     ${DIM}清华系大模型，中文理解能力强，约 ¥0.05/千token${NC}"
+    echo -e "     ${DIM}API Key: https://open.bigmodel.cn/usercenter/apikeys${NC}"
     echo ""
     echo -e "  ${BOLD}3)${NC} ${BOLD}通义千问${NC}"
-    echo -e "     ${DIM}阿里云大模型，生态完善，约 ¥0.02/千token${NC}"
+    echo -e "     ${DIM}API Key: https://dashscope.console.aliyun.com/apiKey${NC}"
     echo ""
-    echo -e "  ${BOLD}4)${NC} ${DIM}跳过，稍后在 cc-switch 中配置${NC}"
+    echo -e "  ${CYAN}下一步：打开 cc-switch → Claude Code → 新建/选择模型 → 填入 API Key → 启用。${NC}"
     echo ""
-
-    local choice
-    read -rp "  请输入选项 [1-4] (默认 1): " choice </dev/tty
-    choice="${choice:-1}"
-
-    local base_url=""
-    local model_name=""
-    local api_key_url=""
-
-    case "$choice" in
-        1)
-            model_name="DeepSeek"
-            base_url="https://api.deepseek.com"
-            api_key_url="https://platform.deepseek.com/api_keys"
-            ;;
-        2)
-            model_name="智谱 GLM-4"
-            base_url="https://open.bigmodel.cn/api/paas/v4"
-            api_key_url="https://open.bigmodel.cn/usercenter/apikeys"
-            ;;
-        3)
-            model_name="通义千问"
-            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
-            api_key_url="https://dashscope.console.aliyun.com/apiKey"
-            ;;
-        4)
-            info "跳过模型配置。请安装完成后打开 cc-switch 进行配置。"
-            return 0
-            ;;
-        *)
-            warn "无效选项，跳过配置"
-            return 0
-            ;;
-    esac
-
-    echo ""
-    info "已选择: ${BOLD}${model_name}${NC}"
-    info "请在以下网址获取 API Key:"
-    echo -e "  ${CYAN}${api_key_url}${NC}"
-    echo ""
-
-    local api_key
-    read -rp "  请输入 API Key (输入后回车): " api_key </dev/tty
-
-    if [[ -z "$api_key" ]]; then
-        warn "未输入 API Key，跳过配置"
-        return 0
-    fi
-
-    # 写入配置
-    local claude_dir="$HOME/.claude"
-    local settings_file="${claude_dir}/settings.json"
-    mkdir -p "$claude_dir"
-
-    # 如果已有配置，先备份
-    if [[ -f "$settings_file" ]]; then
-        cp "$settings_file" "${settings_file}.bak"
-        info "已备份原有配置到 settings.json.bak"
-    fi
-
-    # 写入新配置（保留已有配置中的其他字段）
-    if command_exists python3; then
-        python3 -c "
-import json, os
-
-settings_file = os.path.expanduser('~/.claude/settings.json')
-settings = {}
-if os.path.exists(settings_file):
-    try:
-        with open(settings_file) as f:
-            settings = json.load(f)
-    except:
-        pass
-
-if 'env' not in settings:
-    settings['env'] = {}
-
-settings['env']['ANTHROPIC_BASE_URL'] = '${base_url}'
-settings['env']['ANTHROPIC_AUTH_TOKEN'] = '${api_key}'
-
-with open(settings_file, 'w') as f:
-    json.dump(settings, f, indent=2, ensure_ascii=False)
-"
-    else
-        # 没有 python3，直接写入
-        cat > "$settings_file" << EOJSON
-{
-  "env": {
-    "ANTHROPIC_BASE_URL": "${base_url}",
-    "ANTHROPIC_AUTH_TOKEN": "${api_key}"
-  }
-}
-EOJSON
-    fi
-
-    success "模型配置已写入 ${settings_file}"
+    read -rp "  已在 cc-switch 中启用模型后按回车继续，或直接按回车稍后配置... " </dev/tty
 }
 
 # ── 完成页面 ──────────────────────────────────────────────────────────────────

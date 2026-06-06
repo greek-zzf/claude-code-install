@@ -1,6 +1,6 @@
 # ============================================================================
 #  Claude Code + CC-Switch 一键安装器 (Windows)
-#  适用于中国大陆用户，全程使用国内镜像，无需翻墙
+#  适用于中国大陆用户，优先使用国内镜像与 GitHub 代理
 # ============================================================================
 
 #Requires -Version 5.1
@@ -12,10 +12,15 @@ $ProgressPreference = "SilentlyContinue" # 加速 Invoke-WebRequest
 
 # ── 镜像地址 ──────────────────────────────────────────────────────────────────
 $NPM_MIRROR = "https://registry.npmmirror.com"
-$NODE_MIRROR = "https://mirrors.tuna.tsinghua.edu.cn/nodejs-release"
+$NODE_MIRRORS = @(
+    "https://npmmirror.com/mirrors/node",
+    "https://mirrors.cloud.tencent.com/nodejs-release",
+    "https://repo.huaweicloud.com/nodejs",
+    "https://mirrors.tuna.tsinghua.edu.cn/nodejs-release"
+)
 $GIT_MIRROR = "https://registry.npmmirror.com/-/binary/git-for-windows"
+$NODE_LTS_VERSION = "v20.18.1"
 $GHPROXY_MIRRORS = @(
-    "https://mirror.ghproxy.com"
     "https://gh-proxy.com"
     "https://ghproxy.net"
 )
@@ -34,7 +39,7 @@ function Write-Banner {
     Write-Host "  ╔══════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
     Write-Host "  ║                                                        ║" -ForegroundColor Cyan
     Write-Host "  ║     🚀  Claude Code + CC-Switch 一键安装器              ║" -ForegroundColor Cyan
-    Write-Host "  ║         适用于中国大陆用户 · 全程国内镜像               ║" -ForegroundColor Cyan
+    Write-Host "  ║         适用于中国大陆用户 · 优先国内镜像               ║" -ForegroundColor Cyan
     Write-Host "  ║                                                        ║" -ForegroundColor Cyan
     Write-Host "  ╚══════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
     Write-Host ""
@@ -78,8 +83,83 @@ function Invoke-WithRetry {
     return $false
 }
 
+function Invoke-NodeDownload {
+    param(
+        [string]$FileName,
+        [string]$OutFile
+    )
+
+    foreach ($mirror in $NODE_MIRRORS) {
+        $url = "$mirror/$NODE_LTS_VERSION/$FileName"
+        Write-Info "尝试 Node.js 镜像: $mirror"
+        try {
+            Invoke-WebRequest -Uri $url -OutFile $OutFile -UseBasicParsing -TimeoutSec 60
+            return $true
+        }
+        catch {
+            Write-Warn "此 Node.js 镜像下载失败，尝试下一个..."
+        }
+    }
+
+    return $false
+}
+
 function Refresh-Path {
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+}
+
+function Add-NpmPrefixToPath {
+    try {
+        $npmPrefix = (npm config get prefix 2>$null).Trim()
+        if ($npmPrefix -and (Test-Path $npmPrefix)) {
+            $env:Path = "$npmPrefix;$env:Path"
+        }
+    }
+    catch {}
+}
+
+function Confirm-ClaudeCode {
+    Refresh-Path
+    Add-NpmPrefixToPath
+
+    if (-not (Test-Command "claude")) {
+        Write-Err "Claude Code 安装后未找到 claude 命令"
+        return $false
+    }
+
+    $versionOutput = claude --version 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "Claude Code 已安装但无法运行: $versionOutput"
+        return $false
+    }
+
+    if (($versionOutput -join "`n") -match "native binary") {
+        Write-Err "Claude Code native binary 缺失，请确认 npm optional dependencies 未被禁用"
+        return $false
+    }
+
+    Write-Success "Claude Code 安装完成: $versionOutput"
+    return $true
+}
+
+function Get-LatestCCSwitchVersion {
+    $defaultVersion = "v3.16.1"
+    $apiUrls = @("https://api.github.com/repos/farion1231/cc-switch/releases/latest")
+    foreach ($proxy in $GHPROXY_MIRRORS) {
+        $apiUrls += "$proxy/https://api.github.com/repos/farion1231/cc-switch/releases/latest"
+    }
+
+    foreach ($url in $apiUrls) {
+        try {
+            $release = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 10 | ConvertFrom-Json
+            if ($release.tag_name) {
+                return $release.tag_name
+            }
+        }
+        catch {}
+    }
+
+    return $defaultVersion
 }
 
 # ── Step 1: 环境检测 ──────────────────────────────────────────────────────────
@@ -188,24 +268,7 @@ function Install-Git {
 
     Write-Step "2/6" "安装 Git for Windows"
 
-    if ($script:HasWinGet) {
-        Write-Info "通过 WinGet 安装 Git..."
-        try {
-            winget install Git.Git --accept-source-agreements --accept-package-agreements --silent 2>&1 | ForEach-Object {
-                Write-Host "  $_" -ForegroundColor DarkGray
-            }
-            Refresh-Path
-            if (Test-Command "git") {
-                Write-Success "Git 安装完成"
-                return
-            }
-        }
-        catch {
-            Write-Warn "WinGet 安装失败，尝试直接下载..."
-        }
-    }
-
-    # 直接下载安装
+    # 优先使用国内镜像直接下载安装
     Write-Info "通过淘宝镜像下载 Git 安装包..."
     $gitUrl = "https://registry.npmmirror.com/-/binary/git-for-windows/v2.47.1.windows.1/Git-2.47.1-64-bit.exe"
     $gitInstaller = "$env:TEMP\git-installer.exe"
@@ -225,14 +288,34 @@ function Install-Git {
 
         if (Test-Command "git") {
             Write-Success "Git 安装完成"
+            return
         } else {
             Write-Warn "Git 安装完成但需要重启终端才能使用"
         }
     }
     catch {
-        Write-Err "Git 下载/安装失败: $_"
-        Write-Info "请手动下载安装: https://git-scm.com/downloads/win"
+        Write-Warn "Git 镜像下载/安装失败: $_"
     }
+
+    if ($script:HasWinGet) {
+        Write-Info "尝试通过 WinGet 兜底安装 Git..."
+        try {
+            winget install Git.Git --accept-source-agreements --accept-package-agreements --silent 2>&1 | ForEach-Object {
+                Write-Host "  $_" -ForegroundColor DarkGray
+            }
+            Refresh-Path
+            if (Test-Command "git") {
+                Write-Success "Git 安装完成"
+                return
+            }
+        }
+        catch {
+            Write-Warn "WinGet 安装失败"
+        }
+    }
+
+    Write-Err "Git 安装失败"
+    Write-Info "请手动下载安装: https://registry.npmmirror.com/-/binary/git-for-windows/"
 }
 
 # ── Step 3: 安装 Node.js ──────────────────────────────────────────────────────
@@ -242,31 +325,15 @@ function Install-NodeJS {
 
     Write-Step "3/6" "安装 Node.js 20 LTS"
 
-    if ($script:HasWinGet) {
-        Write-Info "通过 WinGet 安装 Node.js..."
-        try {
-            winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>&1 | ForEach-Object {
-                Write-Host "  $_" -ForegroundColor DarkGray
-            }
-            Refresh-Path
-            if (Test-Command "node") {
-                $ver = node --version
-                Write-Success "Node.js $ver 安装完成"
-                return
-            }
-        }
-        catch {
-            Write-Warn "WinGet 安装失败，尝试直接下载..."
-        }
-    }
-
-    # 直接下载 MSI
-    Write-Info "通过清华镜像下载 Node.js 安装包..."
-    $nodeUrl = "$NODE_MIRROR/v20.18.1/node-v20.18.1-x64.msi"
+    # 优先使用国内镜像直接下载 MSI
+    Write-Info "通过 Node.js 镜像下载安装包..."
+    $nodeFile = "node-$NODE_LTS_VERSION-x64.msi"
     $nodeMsi = "$env:TEMP\nodejs-install.msi"
 
     try {
-        Invoke-WebRequest -Uri $nodeUrl -OutFile $nodeMsi -UseBasicParsing
+        if (-not (Invoke-NodeDownload -FileName $nodeFile -OutFile $nodeMsi)) {
+            throw "所有 Node.js 镜像均下载失败"
+        }
         Write-Info "正在静默安装 Node.js..."
         Start-Process msiexec.exe -ArgumentList "/i `"$nodeMsi`" /qn /norestart" -Wait
         Remove-Item $nodeMsi -Force -ErrorAction SilentlyContinue
@@ -281,15 +348,36 @@ function Install-NodeJS {
         if (Test-Command "node") {
             $ver = node --version
             Write-Success "Node.js $ver 安装完成"
+            return
         } else {
             Write-Err "Node.js 安装失败"
             exit 1
         }
     }
     catch {
-        Write-Err "Node.js 下载/安装失败: $_"
-        exit 1
+        Write-Warn "Node.js 镜像下载/安装失败: $_"
     }
+
+    if ($script:HasWinGet) {
+        Write-Info "尝试通过 WinGet 兜底安装 Node.js..."
+        try {
+            winget install OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements --silent 2>&1 | ForEach-Object {
+                Write-Host "  $_" -ForegroundColor DarkGray
+            }
+            Refresh-Path
+            if (Test-Command "node") {
+                $ver = node --version
+                Write-Success "Node.js $ver 安装完成"
+                return
+            }
+        }
+        catch {
+            Write-Warn "WinGet 安装失败"
+        }
+    }
+
+    Write-Err "Node.js 安装失败"
+    exit 1
 }
 
 # ── Step 4: 安装 Claude Code ──────────────────────────────────────────────────
@@ -299,15 +387,26 @@ function Install-ClaudeCode {
         # 检查更新
         if (Test-Command "claude") {
             Write-Step "4/6" "检查 Claude Code 更新"
-            npm update -g @anthropic-ai/claude-code --registry="$NPM_MIRROR" 2>&1 | ForEach-Object {
+            npm install -g @anthropic-ai/claude-code@latest --include=optional --registry="$NPM_MIRROR" 2>&1 | ForEach-Object {
                 Write-Host "  $_" -ForegroundColor DarkGray
             }
-            Write-Success "Claude Code 已是最新版本"
+            if (-not (Confirm-ClaudeCode)) {
+                Write-Err "Claude Code 更新后验证失败"
+                exit 1
+            }
         }
         return
     }
 
     Write-Step "4/6" "安装 Claude Code（淘宝 NPM 镜像）"
+
+    # 清理残留临时目录防 npm ENOTEMPTY 报错
+    try {
+        $npmPrefix = (npm config get prefix 2>$null).Trim()
+        if ($npmPrefix -and (Test-Path "$npmPrefix\node_modules\@anthropic-ai")) {
+            Get-ChildItem -Path "$npmPrefix\node_modules\@anthropic-ai" -Filter ".claude-code-*" -Directory | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
 
     $mirrors = @(
         "https://registry.npmmirror.com",
@@ -316,7 +415,6 @@ function Install-ClaudeCode {
         "https://registry.npmjs.org"
     )
 
-    $installed = $false
     foreach ($mirror in $mirrors) {
         if ($mirror -eq "https://registry.npmjs.org") {
             Write-Info "使用官方源作为最终兜底: $mirror"
@@ -324,10 +422,9 @@ function Install-ClaudeCode {
             Write-Info "使用镜像: $mirror"
         }
         try {
-            $output = npm install -g @anthropic-ai/claude-code --registry="$mirror" 2>&1
+            $output = npm install -g @anthropic-ai/claude-code@latest --include=optional --registry="$mirror" 2>&1
             $output | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkGray }
             if ($LASTEXITCODE -eq 0) {
-                $installed = $true
                 break
             } else {
                 Write-Warn "安装失败，尝试下一个镜像..."
@@ -339,18 +436,11 @@ function Install-ClaudeCode {
     }
 
     Refresh-Path
+    Add-NpmPrefixToPath
 
-    # npm 全局 bin 可能不在 PATH 中
-    $npmPrefix = (npm config get prefix 2>$null)
-    if ($npmPrefix -and (Test-Path $npmPrefix)) {
-        $env:Path = "$npmPrefix;$env:Path"
-    }
-
-    if (Test-Command "claude") {
-        Write-Success "Claude Code 安装完成"
-    } else {
+    if (-not (Confirm-ClaudeCode)) {
         Write-Err "Claude Code 安装失败"
-        Write-Err "请尝试手动运行: npm install -g @anthropic-ai/claude-code --registry=$NPM_MIRROR"
+        Write-Err "请尝试手动运行: npm install -g @anthropic-ai/claude-code@latest --include=optional --registry=$NPM_MIRROR"
         exit 1
     }
 }
@@ -363,12 +453,13 @@ function Install-CCSwitch {
     Write-Step "5/6" "安装 cc-switch"
 
     Write-Info "正在通过 GitHub 镜像代理下载 cc-switch..."
+    $version = Get-LatestCCSwitchVersion
+    $filename = "CC-Switch-$version-Windows.msi"
 
     foreach ($proxy in $GHPROXY_MIRRORS) {
         Write-Info "尝试镜像: $proxy"
 
-        # 尝试 MSI
-        $downloadUrl = "$proxy/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch-Windows-x64.msi"
+        $downloadUrl = "$proxy/https://github.com/farion1231/cc-switch/releases/download/$version/$filename"
         $msiPath = "$env:TEMP\cc-switch.msi"
 
         try {
@@ -382,27 +473,13 @@ function Install-CCSwitch {
         }
         catch {
             Write-Warn "此镜像下载失败，尝试下一个..."
-
-            # 尝试 exe 安装包
-            try {
-                $exeUrl = "$proxy/https://github.com/farion1231/cc-switch/releases/latest/download/CC-Switch-Windows-x64-setup.exe"
-                $exePath = "$env:TEMP\cc-switch-setup.exe"
-                Invoke-WebRequest -Uri $exeUrl -OutFile $exePath -UseBasicParsing -TimeoutSec 60
-                Write-Info "正在安装 cc-switch..."
-                Start-Process -FilePath $exePath -ArgumentList "/S" -Wait
-                Remove-Item $exePath -Force -ErrorAction SilentlyContinue
-                Write-Success "cc-switch 安装完成"
-                return
-            }
-            catch {
-                continue
-            }
+            continue
         }
     }
 
     Write-Warn "cc-switch 自动安装失败"
     Write-Info "请手动下载安装:"
-    Write-Info "  https://mirror.ghproxy.com/https://github.com/farion1231/cc-switch/releases"
+    Write-Info "  https://gh-proxy.com/https://github.com/farion1231/cc-switch/releases"
 }
 
 # ── Step 6: 配置模型 ──────────────────────────────────────────────────────────
@@ -411,100 +488,23 @@ function Set-ModelConfig {
     Write-Step "6/6" "配置 AI 模型"
 
     Write-Host ""
-    Write-Host "  请选择默认使用的 AI 模型:" -ForegroundColor White
+    Write-Host "  请通过 cc-switch 配置并启用国产模型。" -ForegroundColor White
+    Write-Host "  Claude Code 需要 Anthropic 协议接口；不要把国产模型地址直接写入 ~/.claude/settings.json。" -ForegroundColor DarkGray
+    Write-Host "  cc-switch 会负责协议转换，并在启用配置后写入本地代理地址。" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  1) DeepSeek " -NoNewline -ForegroundColor White
     Write-Host "(推荐)" -ForegroundColor Green
-    Write-Host "     国产顶级编程模型，性价比极高，约 ¥0.001/千token" -ForegroundColor DarkGray
+    Write-Host "     API Key: https://platform.deepseek.com/api_keys" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  2) 智谱 GLM-4" -ForegroundColor White
-    Write-Host "     清华系大模型，中文理解能力强，约 ¥0.05/千token" -ForegroundColor DarkGray
+    Write-Host "     API Key: https://open.bigmodel.cn/usercenter/apikeys" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  3) 通义千问" -ForegroundColor White
-    Write-Host "     阿里云大模型，生态完善，约 ¥0.02/千token" -ForegroundColor DarkGray
+    Write-Host "     API Key: https://dashscope.console.aliyun.com/apiKey" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Host "  4) 跳过，稍后在 cc-switch 中配置" -ForegroundColor DarkGray
+    Write-Host "  下一步：打开 cc-switch → Claude Code → 新建/选择模型 → 填入 API Key → 启用。" -ForegroundColor Cyan
     Write-Host ""
-
-    $choice = Read-Host "  请输入选项 [1-4] (默认 1)"
-    if ([string]::IsNullOrEmpty($choice)) { $choice = "1" }
-
-    $baseUrl = ""
-    $modelName = ""
-    $apiKeyUrl = ""
-
-    switch ($choice) {
-        "1" {
-            $modelName = "DeepSeek"
-            $baseUrl = "https://api.deepseek.com"
-            $apiKeyUrl = "https://platform.deepseek.com/api_keys"
-        }
-        "2" {
-            $modelName = "智谱 GLM-4"
-            $baseUrl = "https://open.bigmodel.cn/api/paas/v4"
-            $apiKeyUrl = "https://open.bigmodel.cn/usercenter/apikeys"
-        }
-        "3" {
-            $modelName = "通义千问"
-            $baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-            $apiKeyUrl = "https://dashscope.console.aliyun.com/apiKey"
-        }
-        "4" {
-            Write-Info "跳过模型配置。请安装完成后打开 cc-switch 进行配置。"
-            return
-        }
-        default {
-            Write-Warn "无效选项，跳过配置"
-            return
-        }
-    }
-
-    Write-Host ""
-    Write-Info "已选择: $modelName"
-    Write-Info "请在以下网址获取 API Key:"
-    Write-Host "  $apiKeyUrl" -ForegroundColor Cyan
-    Write-Host ""
-
-    $apiKey = Read-Host "  请输入 API Key (输入后回车)"
-
-    if ([string]::IsNullOrEmpty($apiKey)) {
-        Write-Warn "未输入 API Key，跳过配置"
-        return
-    }
-
-    # 写入配置
-    $claudeDir = Join-Path $env:USERPROFILE ".claude"
-    $settingsFile = Join-Path $claudeDir "settings.json"
-
-    if (-not (Test-Path $claudeDir)) {
-        New-Item -ItemType Directory -Path $claudeDir -Force | Out-Null
-    }
-
-    # 备份原有配置
-    if (Test-Path $settingsFile) {
-        Copy-Item $settingsFile "$settingsFile.bak" -Force
-        Write-Info "已备份原有配置到 settings.json.bak"
-    }
-
-    # 读取已有配置或创建新配置
-    $settings = @{}
-    if (Test-Path $settingsFile) {
-        try {
-            $settings = Get-Content $settingsFile -Raw | ConvertFrom-Json -AsHashtable
-        }
-        catch { $settings = @{} }
-    }
-
-    if (-not $settings.ContainsKey("env")) {
-        $settings["env"] = @{}
-    }
-
-    $settings["env"]["ANTHROPIC_BASE_URL"] = $baseUrl
-    $settings["env"]["ANTHROPIC_AUTH_TOKEN"] = $apiKey
-
-    $settings | ConvertTo-Json -Depth 10 | Set-Content $settingsFile -Encoding UTF8
-
-    Write-Success "模型配置已写入 $settingsFile"
+    $null = Read-Host "  已在 cc-switch 中启用模型后按回车继续，或直接按回车稍后配置"
 }
 
 # ── 完成页面 ──────────────────────────────────────────────────────────────────

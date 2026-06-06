@@ -1,6 +1,6 @@
 # Claude Code + CC-Switch 一键安装器
 
-> 专为中国大陆用户设计，全程使用国内镜像，无需翻墙。
+> 专为中国大陆用户设计，优先使用中国大陆可访问的镜像源与 GitHub 代理。
 
 ## 这是什么？
 
@@ -43,11 +43,11 @@ bash scripts/install.sh
 
 安装器会自动完成以下步骤：
 
-1. **安装 Node.js 20 LTS**（使用清华大学镜像）
+1. **安装 Node.js 20 LTS**（使用 npmmirror / 腾讯云 / 华为云 / 清华镜像）
 2. **安装 Git**（仅 Windows 需要，使用淘宝镜像）
-3. **安装 Claude Code**（使用淘宝 NPM 镜像）
+3. **安装 Claude Code**（使用淘宝 / 腾讯云 / 华为云 NPM 镜像，包含官方 optional 二进制包）
 4. **安装 CC-Switch**（使用 GitHub 代理镜像）
-5. **配置 AI 模型**（选择国产模型 + 填入 API Key）
+5. **引导配置 AI 模型**（在 cc-switch 中选择国产模型 + 填入 API Key）
 
 ## 支持的国产模型
 
@@ -93,14 +93,17 @@ A: 右键点击应用 → 选择"打开" → 点击"仍要打开"。
 
 A: 可能是镜像站临时不稳定。请等几分钟后重新运行安装脚本，安装器会自动跳过已安装的组件。
 
-## 使用的国内镜像
+## 中国大陆可用镜像覆盖
 
-| 组件 | 镜像源 |
-|------|--------|
-| NPM 包 | npmmirror.com（淘宝） |
-| Node.js | mirrors.tuna.tsinghua.edu.cn（清华） |
-| GitHub Releases | mirror.ghproxy.com（代理） |
-| Git for Windows | npmmirror.com（淘宝） |
+| 环境 | Node.js | NPM / Claude Code | Git | cc-switch |
+|------|---------|-------------------|-----|-----------|
+| macOS | npmmirror、腾讯云、华为云、清华 | npmmirror、腾讯云、华为云，官方源兜底 | 使用系统已有 Git | GitHub 代理镜像 |
+| Windows | npmmirror、腾讯云、华为云、清华，WinGet 兜底 | npmmirror、腾讯云、华为云，官方源兜底 | npmmirror Git for Windows，WinGet 兜底 | GitHub 代理镜像 |
+| Linux | npmmirror、腾讯云、华为云、清华 tarball | npmmirror、腾讯云、华为云，官方源兜底 | 使用系统包管理器或已有 Git | GitHub 代理镜像 |
+
+> 说明：Claude Code 官方 NPM 包依赖 optional dependencies 下载平台二进制，安装器会使用 `--include=optional` 并在安装后运行 `claude --version` 验证。
+>
+> cc-switch 发布包来自 GitHub Releases，安装器提供多个 GitHub 代理镜像；代理可用性会波动，失败时请稍后重试或手动下载。
 
 ## 项目结构
 

@@ -1,5 +1,5 @@
 import { ipcMain, shell } from 'electron'
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs'
+import { existsSync } from 'fs'
 import { join } from 'path'
 import { homedir, platform } from 'os'
 import { execSync } from 'child_process'
@@ -19,35 +19,6 @@ export function registerIpcHandlers() {
       cachedEnvCheck = checkAll()
     }
     await runInstall(cachedEnvCheck)
-  })
-
-  ipcMain.handle('config:save', async (_event, config: { baseUrl: string; authToken: string }) => {
-    const claudeDir = join(homedir(), '.claude')
-    const settingsFile = join(claudeDir, 'settings.json')
-
-    if (!existsSync(claudeDir)) {
-      mkdirSync(claudeDir, { recursive: true })
-    }
-
-    let settings: Record<string, unknown> = {}
-    if (existsSync(settingsFile)) {
-      try {
-        settings = JSON.parse(readFileSync(settingsFile, 'utf-8'))
-      } catch {
-        // Ignore parse errors
-      }
-      // Backup
-      writeFileSync(`${settingsFile}.bak`, JSON.stringify(settings, null, 2), 'utf-8')
-    }
-
-    if (!settings.env || typeof settings.env !== 'object') {
-      settings.env = {}
-    }
-    ;(settings.env as Record<string, string>).ANTHROPIC_BASE_URL = config.baseUrl
-    ;(settings.env as Record<string, string>).ANTHROPIC_AUTH_TOKEN = config.authToken
-
-    writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf-8')
-    return { success: true, path: settingsFile }
   })
 
   ipcMain.handle('app:open-terminal', async () => {

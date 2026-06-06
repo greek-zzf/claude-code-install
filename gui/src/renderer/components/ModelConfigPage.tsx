@@ -6,7 +6,6 @@ interface Model {
   description: string
   recommended?: boolean
   apiKeyUrl: string
-  baseUrl: string
   pricing?: string
 }
 
@@ -17,7 +16,6 @@ const MODELS: Model[] = [
     description: '国产顶级编程模型，性价比极高',
     recommended: true,
     apiKeyUrl: 'https://platform.deepseek.com/api_keys',
-    baseUrl: 'https://api.deepseek.com',
     pricing: '约 ¥0.001/千token'
   },
   {
@@ -25,7 +23,6 @@ const MODELS: Model[] = [
     name: '智谱 GLM-4',
     description: '清华系大模型，中文理解能力强',
     apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
-    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     pricing: '约 ¥0.05/千token'
   },
   {
@@ -33,7 +30,6 @@ const MODELS: Model[] = [
     name: '通义千问',
     description: '阿里云大模型，生态完善',
     apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
-    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
     pricing: '约 ¥0.02/千token'
   }
 ]
@@ -44,30 +40,12 @@ interface Props {
 
 export default function ModelConfigPage({ onNext }: Props) {
   const [selected, setSelected] = useState<string | null>(null)
-  const [apiKey, setApiKey] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   const selectedModel = MODELS.find((m) => m.id === selected)
 
-  const handleSave = async () => {
-    if (!selectedModel || !apiKey.trim()) return
-    setSaving(true)
-    try {
-      await window.electronAPI.saveConfig({
-        baseUrl: selectedModel.baseUrl,
-        authToken: apiKey.trim()
-      })
-      setSaved(true)
-      setTimeout(() => onNext(), 800)
-    } catch {
-      setSaving(false)
-    }
-  }
-
   return (
     <>
-      <div className="page-title">选择 AI 模型</div>
+      <div className="page-title">通过 cc-switch 配置模型</div>
       <div className="model-grid">
         {MODELS.map((model) => (
           <div
@@ -75,8 +53,6 @@ export default function ModelConfigPage({ onNext }: Props) {
             className={`model-card ${selected === model.id ? 'selected' : ''}`}
             onClick={() => {
               setSelected(model.id)
-              setApiKey('')
-              setSaved(false)
             }}
           >
             {model.recommended && <div className="model-badge">推荐</div>}
@@ -98,31 +74,20 @@ export default function ModelConfigPage({ onNext }: Props) {
 
       {selectedModel && (
         <div className="api-key-input">
-          <label>输入 {selectedModel.name} API Key</label>
-          <input
-            type="password"
-            placeholder="sk-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSave()}
-            autoFocus
-          />
+          <label>{selectedModel.name} 配置方式</label>
+          <div style={{ color: 'var(--text-secondary)', fontSize: 13, lineHeight: 1.6 }}>
+            先打开上方 API Key 地址复制密钥，再到 cc-switch 的 Claude Code 配置中选择该模型、粘贴 API Key 并启用。
+          </div>
         </div>
       )}
 
       <div className="btn-group">
         <button className="btn-secondary" onClick={onNext}>
-          跳过，稍后配置
+          已启用，下一步
         </button>
-        {selectedModel && (
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={!apiKey.trim() || saving}
-          >
-            {saved ? '✅ 已保存' : saving ? '保存中...' : '完成配置'}
-          </button>
-        )}
+        <button className="btn-primary" onClick={() => window.electronAPI.openCCSwitch()}>
+          打开 cc-switch
+        </button>
       </div>
     </>
   )

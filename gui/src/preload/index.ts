@@ -3,7 +3,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 export interface ElectronAPI {
   checkEnv: () => Promise<import('../main/env-check').EnvCheckResult>
   startInstall: () => Promise<void>
-  saveConfig: (config: { baseUrl: string; authToken: string }) => Promise<{ success: boolean; path: string }>
   openTerminal: () => Promise<void>
   openCCSwitch: () => Promise<void>
   openUrl: (url: string) => Promise<void>
@@ -14,7 +13,6 @@ export interface ElectronAPI {
 const api: ElectronAPI = {
   checkEnv: () => ipcRenderer.invoke('env:check'),
   startInstall: () => ipcRenderer.invoke('install:start'),
-  saveConfig: (config) => ipcRenderer.invoke('config:save', config),
   openTerminal: () => ipcRenderer.invoke('app:open-terminal'),
   openCCSwitch: () => ipcRenderer.invoke('app:open-ccswitch'),
   openUrl: (url) => ipcRenderer.invoke('app:open-url', url),

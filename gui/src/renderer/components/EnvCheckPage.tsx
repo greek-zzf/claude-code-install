@@ -89,6 +89,8 @@ export default function EnvCheckPage({ onNext, onEnvChecked }: Props) {
       // cc-switch
       if (env.ccSwitch.installed) {
         result.push({ key: 'ccswitch', name: 'cc-switch', icon: '✅', status: '已安装' })
+      } else if (!isMac && !isWin) {
+        result.push({ key: 'ccswitch', name: 'cc-switch', icon: '⚠️', status: '未安装', action: '请使用脚本安装' })
       } else {
         result.push({ key: 'ccswitch', name: 'cc-switch', icon: '📦', status: '未安装', action: '将安装' })
         needs++

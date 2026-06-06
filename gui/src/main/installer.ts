@@ -1,9 +1,9 @@
-import { spawn, SpawnOptionsWithoutStdio } from 'child_process'
+import { execSync, spawn, SpawnOptionsWithoutStdio } from 'child_process'
 import { platform, homedir } from 'os'
 import { BrowserWindow } from 'electron'
 import { EnvCheckResult } from './env-check'
 import { join } from 'path'
-import { existsSync, readdirSync } from 'fs'
+import { existsSync, readdirSync, rmSync } from 'fs'
 
 const NPM_MIRRORS = [
   'https://registry.npmmirror.com',
@@ -14,12 +14,17 @@ const NPM_MIRRORS = [
 const HOMEBREW_GITEE = 'https://gitee.com/cunkai/HomebrewCN/raw/master/Homebrew.sh'
 const HOMEBREW_API_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles/api'
 const HOMEBREW_BOTTLE_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/homebrew-bottles'
-const NODE_MIRROR = 'https://mirrors.tuna.tsinghua.edu.cn/nodejs-release'
+const NODE_MIRRORS = [
+  'https://npmmirror.com/mirrors/node',
+  'https://mirrors.cloud.tencent.com/nodejs-release',
+  'https://repo.huaweicloud.com/nodejs',
+  'https://mirrors.tuna.tsinghua.edu.cn/nodejs-release'
+]
+const NODE_LTS_VERSION = 'v20.18.1'
 const GIT_MIRROR = 'https://registry.npmmirror.com/-/binary/git-for-windows'
 const GHPROXY_MIRRORS = [
   'https://gh-proxy.com',
-  'https://ghproxy.net',
-  'https://ghp.ci'
+  'https://ghproxy.net'
 ]
 
 function sendLog(step: string, line: string) {
@@ -44,6 +49,13 @@ function runCommand(
     const extraPaths = platform() === 'darwin'
       ? ['/opt/homebrew/bin', '/usr/local/bin']
       : []
+
+    try {
+      const npmPrefix = execSync('npm config get prefix', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+      if (npmPrefix) {
+        extraPaths.push(platform() === 'win32' ? npmPrefix : join(npmPrefix, 'bin'))
+      }
+    } catch {}
 
     // Add NVM path if exists
     if (platform() === 'darwin') {
@@ -105,19 +117,31 @@ function runCommand(
   })
 }
 
+async function downloadNodeFile(fileName: string, outputPath: string, step: string): Promise<{ success: boolean; error?: string }> {
+  let lastError = ''
+
+  for (const mirror of NODE_MIRRORS) {
+    sendLog(step, `尝试 Node.js 镜像: ${mirror}`)
+    const url = `${mirror}/${NODE_LTS_VERSION}/${fileName}`
+    const result = platform() === 'win32'
+      ? await runCommand('powershell', ['-Command', `Invoke-WebRequest -Uri '${url}' -OutFile '${outputPath}' -UseBasicParsing -TimeoutSec 60`], step)
+      : await runCommand('curl', ['-fSL', '--progress-bar', url, '-o', outputPath], step)
+
+    if (result.success) return result
+    lastError = result.error || '下载失败'
+  }
+
+  return { success: false, error: lastError || '所有 Node.js 镜像均下载失败' }
+}
+
 
 async function installNodeJS(envCheck: EnvCheckResult): Promise<{ success: boolean; error?: string }> {
   const isMac = platform() === 'darwin'
 
   if (isMac) {
     // Download pkg directly
-    sendLog('nodejs', '通过清华镜像下载 Node.js 安装包...')
-    const url = `${NODE_MIRROR}/v20.18.1/node-v20.18.1.pkg`
-    let result = await runCommand(
-      'curl',
-      ['-fSL', '--progress-bar', url, '-o', '/tmp/nodejs-install.pkg'],
-      'nodejs'
-    )
+    sendLog('nodejs', '通过 Node.js 镜像下载安装包...')
+    let result = await downloadNodeFile(`node-${NODE_LTS_VERSION}.pkg`, '/tmp/nodejs-install.pkg', 'nodejs')
     if (!result.success) return result
 
     sendLog('nodejs', '正在安装 Node.js (需要管理员权限，请在系统弹窗中确认并输入密码)...')
@@ -129,25 +153,22 @@ async function installNodeJS(envCheck: EnvCheckResult): Promise<{ success: boole
     return result
   }
 
-  // Windows
-  if (envCheck.winget.installed) {
-    sendLog('nodejs', '通过 WinGet 安装 Node.js...')
+  if (platform() !== 'win32') {
+    return { success: false, error: '可视化安装器目前仅支持 macOS 和 Windows 自动安装 Node.js' }
+  }
+
+  // Windows: prefer direct mirror download, keep WinGet as fallback.
+  sendLog('nodejs', '通过 Node.js 镜像下载安装包...')
+  const msiPath = `${process.env.TEMP}\\nodejs-install.msi`
+  let result = await downloadNodeFile(`node-${NODE_LTS_VERSION}-x64.msi`, msiPath, 'nodejs')
+  if (!result.success && envCheck.winget.installed) {
+    sendLog('nodejs', '镜像下载失败，尝试通过 WinGet 兜底安装 Node.js...')
     return runCommand(
       'winget',
       ['install', 'OpenJS.NodeJS.LTS', '--accept-source-agreements', '--accept-package-agreements', '--silent'],
       'nodejs'
     )
   }
-
-  // Direct download MSI
-  sendLog('nodejs', '通过清华镜像下载 Node.js 安装包...')
-  const msiUrl = `${NODE_MIRROR}/v20.18.1/node-v20.18.1-x64.msi`
-  const msiPath = `${process.env.TEMP}\\nodejs-install.msi`
-  let result = await runCommand(
-    'powershell',
-    ['-Command', `Invoke-WebRequest -Uri '${msiUrl}' -OutFile '${msiPath}' -UseBasicParsing`],
-    'nodejs'
-  )
   if (!result.success) return result
 
   return runCommand(
@@ -160,24 +181,22 @@ async function installNodeJS(envCheck: EnvCheckResult): Promise<{ success: boole
 async function installGit(): Promise<{ success: boolean; error?: string }> {
   sendLog('git', '正在安装 Git for Windows...')
 
-  // Try WinGet first
-  let result = await runCommand(
-    'winget',
-    ['install', 'Git.Git', '--accept-source-agreements', '--accept-package-agreements', '--silent'],
-    'git'
-  )
-  if (result.success) return result
-
-  // Fallback: direct download
   sendLog('git', '通过淘宝镜像下载 Git 安装包...')
   const gitUrl = `${GIT_MIRROR}/v2.47.1.windows.1/Git-2.47.1-64-bit.exe`
   const gitPath = `${process.env.TEMP}\\git-installer.exe`
-  result = await runCommand(
+  let result = await runCommand(
     'powershell',
     ['-Command', `Invoke-WebRequest -Uri '${gitUrl}' -OutFile '${gitPath}' -UseBasicParsing`],
     'git'
   )
-  if (!result.success) return result
+  if (!result.success) {
+    sendLog('git', '镜像下载失败，尝试通过 WinGet 兜底安装 Git...')
+    return runCommand(
+      'winget',
+      ['install', 'Git.Git', '--accept-source-agreements', '--accept-package-agreements', '--silent'],
+      'git'
+    )
+  }
 
   return runCommand(
     gitPath,
@@ -186,17 +205,67 @@ async function installGit(): Promise<{ success: boolean; error?: string }> {
   )
 }
 
+function cleanConflictDirs(npmPrefix: string) {
+  try {
+    if (!npmPrefix) return
+    const isMac = platform() === 'darwin'
+    const targetDir = isMac
+      ? join(npmPrefix, 'lib', 'node_modules', '@anthropic-ai')
+      : join(npmPrefix, 'node_modules', '@anthropic-ai')
+    if (existsSync(targetDir)) {
+      const files = readdirSync(targetDir)
+      for (const file of files) {
+        if (file.startsWith('.claude-code-') || file === 'claude-code') {
+          const pathToRemove = join(targetDir, file)
+          rmSync(pathToRemove, { recursive: true, force: true })
+        }
+      }
+    }
+  } catch (err: any) {
+    // Silent fail if no permission to write to root-owned dir
+  }
+}
+
 async function installClaudeCode(): Promise<{ success: boolean; error?: string }> {
   const isMac = platform() === 'darwin'
-  
-  // Find absolute npm path for macOS do shell script
-  let npmPath = 'npm'
-  if (isMac) {
-    if (existsSync('/usr/local/bin/npm')) {
-      npmPath = '/usr/local/bin/npm'
-    } else if (existsSync('/opt/homebrew/bin/npm')) {
-      npmPath = '/opt/homebrew/bin/npm'
+
+  // 清理可能存在的主路径残留冲突目录
+  try {
+    const npmPrefix = execSync('npm config get prefix', { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    cleanConflictDirs(npmPrefix)
+  } catch {}
+
+  const installArgs = (mirror: string) => [
+    'install',
+    '-g',
+    '@anthropic-ai/claude-code@latest',
+    '--include=optional',
+    `--registry=${mirror}`
+  ]
+
+  const ensureUserNpmPrefix = async (): Promise<SpawnOptionsWithoutStdio | undefined> => {
+    if (!isMac) return undefined
+
+    const userPrefix = join(homedir(), '.npm-global')
+    // 同时也清理用户目录下的残留冲突文件夹
+    cleanConflictDirs(userPrefix)
+    sendLog('claude', `切换到用户级 npm 目录: ${userPrefix}`)
+    await runCommand('/bin/zsh', ['-lc', `mkdir -p "${userPrefix}/bin" && npm config set prefix "${userPrefix}"`], 'claude')
+    await runCommand('/bin/zsh', ['-lc', `touch "$HOME/.zshrc" && grep -F "${userPrefix}/bin" "$HOME/.zshrc" >/dev/null || printf '\\n# Claude Code installer: user-level npm bin\\nexport PATH="${userPrefix}/bin:$PATH"\\n' >> "$HOME/.zshrc"`], 'claude')
+
+    const pathKey = 'PATH'
+    return {
+      env: {
+        [pathKey]: `${join(userPrefix, 'bin')}:${process.env[pathKey] || ''}`
+      }
     }
+  }
+
+  const verifyClaudeCode = async (): Promise<{ success: boolean; error?: string }> => {
+    const shellCommand = platform() === 'win32'
+      ? 'claude --version'
+      : 'export PATH="$(npm config get prefix)/bin:$PATH"; claude --version'
+    return runCommand(platform() === 'win32' ? 'cmd' : '/bin/zsh', platform() === 'win32' ? ['/c', shellCommand] : ['-lc', shellCommand], 'claude')
   }
 
   for (const mirror of NPM_MIRRORS) {
@@ -209,11 +278,11 @@ async function installClaudeCode(): Promise<{ success: boolean; error?: string }
     // First, try running normally
     let result = await runCommand(
       'npm',
-      ['install', '-g', '@anthropic-ai/claude-code', `--registry=${mirror}`],
+      installArgs(mirror),
       'claude'
     )
 
-    // If it fails with permission error on Mac, try using osascript with administrator privileges
+    // If it fails with permission error on Mac, retry with a user-level npm prefix.
     if (
       !result.success &&
       isMac &&
@@ -222,15 +291,11 @@ async function installClaudeCode(): Promise<{ success: boolean; error?: string }
         result.error.includes('permission') ||
         result.error.includes('checkPermissions'))
     ) {
-      sendLog('claude', '检测到全局安装权限不足，正在请求管理员权限安装...')
-      result = await runCommand(
-        'osascript',
-        ['-e', `do shell script "${npmPath} install -g @anthropic-ai/claude-code --registry=${mirror}" with administrator privileges`],
-        'claude'
-      )
+      const userPrefixOpts = await ensureUserNpmPrefix()
+      result = await runCommand('npm', installArgs(mirror), 'claude', userPrefixOpts)
     }
 
-    if (result.success) return result
+    if (result.success) return verifyClaudeCode()
     sendLog('claude', '此镜像失败，尝试下一个...')
   }
   return { success: false, error: '所有 NPM 镜像均安装失败' }
@@ -243,16 +308,23 @@ async function installCCSwitchMac(): Promise<{ success: boolean; error?: string 
 
 async function getLatestCCSwitchVersion(): Promise<string> {
   const defaultVersion = 'v3.16.1'
-  try {
-    const response = await fetch('https://api.github.com/repos/farion1231/cc-switch/releases/latest', { signal: AbortSignal.timeout(5000) })
-    if (response.ok) {
-      const data = await response.json() as { tag_name: string }
-      if (data && data.tag_name) {
-        return data.tag_name
+  const apiUrls = [
+    'https://api.github.com/repos/farion1231/cc-switch/releases/latest',
+    ...GHPROXY_MIRRORS.map((proxy) => `${proxy}/https://api.github.com/repos/farion1231/cc-switch/releases/latest`)
+  ]
+
+  for (const url of apiUrls) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(5000) })
+      if (response.ok) {
+        const data = await response.json() as { tag_name: string }
+        if (data && data.tag_name) {
+          return data.tag_name
+        }
       }
+    } catch {
+      // Try next mirror
     }
-  } catch {
-    // Ignore and return default
   }
   return defaultVersion
 }
@@ -336,6 +408,10 @@ export async function runInstall(envCheck: EnvCheckResult): Promise<void> {
 
   // Step 5: cc-switch
   if (!envCheck.ccSwitch.installed) {
+    if (!isMac && !isWin) {
+      sendStepComplete('ccswitch', false, '可视化安装器目前仅支持 macOS 和 Windows 自动安装 cc-switch，请在 Linux 上使用 scripts/install.sh')
+      return
+    }
     const result = isMac
       ? await installCCSwitchMac()
       : await downloadCCSwitchDirect('msi')

@@ -109,6 +109,40 @@ export default function InstallingPage({ onNext, envCheck }: Props) {
                   <div ref={step.status === 'running' ? logEndRef : undefined} />
                 </div>
               </div>
+              {step.id === 'claude' && step.status === 'error' && (
+                <div className="npm-error-guide" style={{
+                  marginTop: 10,
+                  padding: '12px 16px',
+                  background: 'rgba(248, 113, 113, 0.08)',
+                  border: '1px solid rgba(248, 113, 113, 0.2)',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '12px',
+                  lineHeight: '1.6',
+                  color: 'var(--text-primary)'
+                }}>
+                  <div style={{ fontWeight: 'bold', color: 'var(--error)', marginBottom: 6 }}>
+                    ⚠️ 自动安装失败？这通常是由于本地存在残留文件或网络代理失效导致的。
+                  </div>
+                  <div style={{ color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    你可以打开终端（Terminal / PowerShell）手动执行以下命令进行清理并安装：
+                  </div>
+                  <pre style={{
+                    background: 'rgba(0, 0, 0, 0.5)',
+                    padding: '8px 12px',
+                    borderRadius: '6px',
+                    fontFamily: 'monospace',
+                    fontSize: '11px',
+                    color: '#38bdf8',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all'
+                  }}>
+                    {window.navigator.platform.toUpperCase().indexOf('WIN') > -1 
+                      ? `# 清除失效代理（若有）并手动重装\nnpm config delete proxy\nnpm config delete https-proxy\nnpm install -g @anthropic-ai/claude-code@latest --include=optional --registry=https://registry.npmmirror.com`
+                      : `# 1. 强制清理冲突的残留目录\nrm -rf $(npm config get prefix)/lib/node_modules/@anthropic-ai/claude-code 2>/dev/null\nrm -rf $(npm config get prefix)/lib/node_modules/@anthropic-ai/.claude-code-* 2>/dev/null\n\n# 2. 清除失效代理并手动重装\nnpm config delete proxy\nnpm config delete https-proxy\nnpm install -g @anthropic-ai/claude-code@latest --include=optional --registry=https://registry.npmmirror.com`
+                    }
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
         ))}

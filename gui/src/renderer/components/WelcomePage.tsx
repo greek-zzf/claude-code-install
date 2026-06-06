@@ -21,7 +21,7 @@ export default function WelcomePage({ onNext }: Props) {
       <p>
         一键安装 Claude Code + CC-Switch
         <br />
-        全程国内镜像，无需翻墙
+        优先国内镜像，配合 cc-switch 使用
       </p>
       {osInfo && <div className="system-info">💻 {osInfo}</div>}
       <button className="btn-primary" onClick={onNext}>
